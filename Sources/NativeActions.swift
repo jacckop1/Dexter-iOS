@@ -2,7 +2,6 @@ import Foundation
 import UIKit
 import WebKit
 
-@MainActor
 enum NativeActions {
     static func toggleOrientation() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
