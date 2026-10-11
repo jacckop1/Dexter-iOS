@@ -1,0 +1,7 @@
+.DS_Store
+build/
+DerivedData/
+Generated/
+Dexter.xcodeproj/
+*.xcuserstate
+xcuserdata/
