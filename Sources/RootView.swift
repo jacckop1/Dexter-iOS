@@ -52,7 +52,10 @@ struct RootView: View {
                     .frame(height: 2)
                 }
 
-                if browser.hasLoadedOnce && !network.isConnected {
+                if let nativeStatus = browser.nativeStatus {
+                    StatusPill(icon: "arrow.down.circle.fill", text: nativeStatus)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                } else if browser.hasLoadedOnce && !network.isConnected {
                     StatusPill(icon: "wifi.slash", text: "Offline")
                         .transition(.move(edge: .top).combined(with: .opacity))
                 } else if browser.hasLoadedOnce, browser.errorMessage != nil {
@@ -65,6 +68,7 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.24), value: network.isConnected)
         .animation(.easeInOut(duration: 0.24), value: browser.hasLoadedOnce)
+        .animation(.easeInOut(duration: 0.24), value: browser.nativeStatus)
         .onChange(of: network.isConnected) { connected in
             if connected && !browser.hasLoadedOnce && browser.errorMessage != nil {
                 browser.reload()
