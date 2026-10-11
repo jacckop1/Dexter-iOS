@@ -13,6 +13,9 @@ concurrency:
   group: dexter-ios-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  APP_VERSION: 1.1.0
+
 jobs:
   build:
     name: Release IPA
@@ -64,6 +67,15 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             build | tee build/xcodebuild.log
 
+      - name: Verify app metadata
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name 'Dexter.app' -print -quit)"
+          test -n "$APP_PATH"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist" | grep -qx 'com.jacckop1.dexter'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist" | grep -qx "$APP_VERSION"
+          file "$APP_PATH/Dexter" | grep -q 'arm64'
+
       - name: Package unsigned IPA
         run: |
           set -euo pipefail
@@ -77,18 +89,18 @@ jobs:
           cp -R "$APP_PATH" build/Payload/Dexter.app
 
           cd build
-          /usr/bin/zip -qry Dexter-v1.0.0-unsigned.ipa Payload
-          shasum -a 256 Dexter-v1.0.0-unsigned.ipa > Dexter-v1.0.0-unsigned.sha256
-          unzip -t Dexter-v1.0.0-unsigned.ipa
-          test -s Dexter-v1.0.0-unsigned.ipa
+          /usr/bin/zip -qry "Dexter-v${APP_VERSION}-unsigned.ipa" Payload
+          shasum -a 256 "Dexter-v${APP_VERSION}-unsigned.ipa" > "Dexter-v${APP_VERSION}-unsigned.sha256"
+          unzip -t "Dexter-v${APP_VERSION}-unsigned.ipa"
+          test -s "Dexter-v${APP_VERSION}-unsigned.ipa"
 
       - name: Upload Dexter IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Dexter-iOS-v1.0.0
+          name: Dexter-iOS-v${{ env.APP_VERSION }}
           path: |
-            build/Dexter-v1.0.0-unsigned.ipa
-            build/Dexter-v1.0.0-unsigned.sha256
+            build/Dexter-v${{ env.APP_VERSION }}-unsigned.ipa
+            build/Dexter-v${{ env.APP_VERSION }}-unsigned.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
