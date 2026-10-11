@@ -16,6 +16,8 @@ targets:
     deploymentTarget: "15.0"
     sources:
       - path: Sources
+        excludes:
+          - DexterWebView.swift
       - path: Generated/Assets.xcassets
         optional: true
     settings:
