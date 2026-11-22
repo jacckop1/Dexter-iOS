@@ -12,6 +12,11 @@ on:
         options:
           - first_two
           - last_three
+          - solateria
+          - ready_or_nowhere
+          - mario_vs_donkey_kong
+          - cult_of_the_lamb
+          - super_mario_3d_world
 
 permissions:
   contents: read

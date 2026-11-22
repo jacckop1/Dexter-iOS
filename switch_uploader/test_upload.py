@@ -62,6 +62,21 @@ class SwitchManifestTests(unittest.TestCase):
         )
         self.assertTrue(all(g.filename.endswith(" [ @iKiraPlus ].ipa") for g in games))
 
+    def test_single_game_retries_do_not_reupload_other_games(self):
+        games = load_games()
+        expected = {
+            "solateria": "Solateria",
+            "ready_or_nowhere": "Ready or Nowhere",
+            "mario_vs_donkey_kong": "Mario vs. Donkey Kong",
+            "cult_of_the_lamb": "Cult of the Lamb",
+            "super_mario_3d_world": "Super Mario 3D World + Bowser's Fury",
+        }
+        for selection, name in expected.items():
+            with self.subTest(selection=selection):
+                chosen = selected_games(games, selection)
+                self.assertEqual(len(chosen), 1)
+                self.assertEqual(chosen[0].name, name)
+
     def test_icon_429_retry_then_skip_without_failing_game(self):
         response = requests.Response()
         response.status_code = 429

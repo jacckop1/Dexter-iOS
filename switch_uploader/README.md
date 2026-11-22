@@ -13,6 +13,32 @@ The workflow validates the chosen batch and transfers only those selected.
 Select the other batch in a separate run. Only one run is active at a time
 because the workflow shares a personal Telegram StringSession.
 
+### Single-game recovery after an interrupted batch
+
+The manual workflow also supports the individual selections:
+`solateria`, `ready_or_nowhere`, `mario_vs_donkey_kong`,
+`cult_of_the_lamb`, and `super_mario_3d_world`.
+
+The run `45070116079` downloaded **Solateria** successfully, uploaded 50% of
+its Telegram parts, then was **externally cancelled**. The log showed
+`The operation was canceled` and no Python or Telegram failure. Its
+350-minute timeout was not reached and `cancel-in-progress: false` means
+a new run in the same workflow does not automatically cancel the active one.
+GitHub does not expose the exact cancelling actor through this job log.
+
+To retry just Solateria, choose `solateria`. Once its message arrives,
+choose `ready_or_nowhere` (or a batch if you intentionally want to resend
+both). **A cancelled runner discards its local downloaded IPA and all
+in-flight Telegram upload parts**, so a new workflow downloads/re-uploads
+the interrupted file from zero. There is no safe way for this script to
+prevent a manual or platform-issued GitHub job cancellation.
+
+If an upload slows from its early transfer speed, it does not by itself
+indicate failure. Do not cancel just because the 5% progress interval gets
+longer; watch for newly acknowledged parts and use the added live progress
+heartbeat. Never start two separate upload workflows with the same Telegram
+StringSession concurrently.
+
 ## Fixed Telegram caption on every file
 
 ```text

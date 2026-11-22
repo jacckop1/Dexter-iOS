@@ -212,7 +212,28 @@ async def upload_big_parts(client, path: Path, concurrency: int = 3,
                             flush=True,
                         )
 
-    await asyncio.gather(*(worker(i) for i in range(concurrency)))
+    # A 5% milestone can take minutes on a throttled Telegram connection.
+    # Heartbeats prove the runner is alive, but do not infer delivery.
+    async def progress_heartbeat() -> None:
+        last_done = -1
+        while True:
+            await asyncio.sleep(60)
+            if done >= parts:
+                return
+            state = "advancing" if done > last_done and last_done >= 0 else "waiting"
+            print(
+                f"[{label}] Telegram upload heartbeat: {done}/{parts} parts "
+                f"({done * 100 // parts}%) acknowledged; {state}",
+                flush=True,
+            )
+            last_done = done
+
+    heartbeat = asyncio.create_task(progress_heartbeat())
+    try:
+        await asyncio.gather(*(worker(i) for i in range(concurrency)))
+    finally:
+        heartbeat.cancel()
+        await asyncio.gather(heartbeat, return_exceptions=True)
     if done != parts:
         raise RuntimeError("Telegram part acknowledgement mismatch")
     print(f"[{label}] All {parts:,} Telegram parts acknowledged", flush=True)

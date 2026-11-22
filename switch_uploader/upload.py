@@ -38,20 +38,27 @@ MANIFEST = Path(__file__).with_name("games.json")
 MAX_FILE_BYTES = PART_SIZE * MAX_PARTS
 ICON_MAX_BYTES = 5 * 1024 * 1024
 
-# Only the intended two exclusive batches are supported.
+# Keep the original two batches and allow retrying only an interrupted game.
+# Individual selections are essential when an external GitHub cancellation
+# interrupts a multi-file run: do not force re-uploading completed games.
 BATCH_SLICES = {
     "first_two": slice(0, 2),
     "last_three": slice(2, 5),
+    "solateria": slice(0, 1),
+    "ready_or_nowhere": slice(1, 2),
+    "mario_vs_donkey_kong": slice(2, 3),
+    "cult_of_the_lamb": slice(3, 4),
+    "super_mario_3d_world": slice(4, 5),
 }
 
 
 def selected_games(games: list["Game"], batch: str) -> list["Game"]:
     if batch not in BATCH_SLICES:
-        raise RuntimeError("Invalid batch: choose first_two or last_three")
+        raise RuntimeError("Invalid game selection: choose a configured batch or single game")
     if len(games) != 5:
         raise RuntimeError("Expected exactly five configured games")
     selected = games[BATCH_SLICES[batch]]
-    if len(selected) not in (2, 3):
+    if len(selected) not in (1, 2, 3):
         raise RuntimeError("Unexpected number of selected games")
     return selected
 
