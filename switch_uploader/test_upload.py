@@ -53,6 +53,10 @@ class SwitchManifestTests(unittest.TestCase):
             sorted(g.name for g in games),
         )
         self.assertTrue(all(g.icon.startswith("https://") for g in games))
+        self.assertEqual(
+            [g.url.split("/")[2] for g in games],
+            ["noord-store.com", "noord-store.com", "ipasoon.icu", "ipasoon.icu", "ipasoon.icu"]
+        )
         self.assertTrue(all(g.filename.endswith(" [ @iKiraPlus ].ipa") for g in games))
 
     def test_reject_unsupported_batch(self):

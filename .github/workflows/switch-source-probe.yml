@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/switch-source-probe.yml"
       - "switch_uploader/source_probe.py"
+      - "switch_uploader/games.json"
   workflow_dispatch:
 
 permissions:
