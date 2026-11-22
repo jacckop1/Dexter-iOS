@@ -8,6 +8,14 @@ on:
         description: "Direct IPA URL; leave empty to use PREMIUM_SOURCE_URL secret"
         required: false
         type: string
+      json_source:
+        description: "JSON URL or repository .json path (alternative to direct IPA URL)"
+        required: false
+        type: string
+      app_selector:
+        description: "For multi-app JSON: app name, ID or 1-based index"
+        required: false
+        type: string
       file_name:
         description: "Optional .ipa file name"
         required: false
@@ -43,6 +51,9 @@ jobs:
       TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}
       SOURCE_URL_INPUT: ${{ inputs.url }}
       SOURCE_URL_SECRET: ${{ secrets.PREMIUM_SOURCE_URL }}
+      METADATA_SOURCE_INPUT: ${{ inputs.json_source }}
+      METADATA_SOURCE_SECRET: ${{ secrets.PREMIUM_METADATA_URL }}
+      APP_SELECTOR: ${{ inputs.app_selector }}
       FILE_NAME: ${{ inputs.file_name }}
       DESTINATION: ${{ inputs.destination }}
       VERIFY_ONLY: ${{ inputs.verify_only }}
@@ -60,6 +71,9 @@ jobs:
 
       - name: Install uploader dependencies
         run: python -m pip install --disable-pip-version-check -r premium_telegram/requirements.txt
+
+      - name: Unit-test JSON metadata parser
+        run: python -m unittest discover -s premium_telegram -p test_metadata.py -v
 
       - name: Check account and optionally upload IPA
         run: python premium_telegram/uploader.py

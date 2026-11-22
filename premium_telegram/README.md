@@ -88,3 +88,18 @@ python premium_telegram/generate_session.py
 It prompts for phone number, Telegram login code and optional two-step password. You do **not** need a second device for this approach.
 
 For security, **do not run QR/session generation via GitHub Actions**: public logs can expose login credentials. Close and delete your Codespace when finished, and after the one-off upload terminate that Telegram session via **Settings -> Devices**.
+
+## JSON metadata, caption and thumbnail (new)
+
+You can now upload one IPA with its original description and an icon thumbnail **from a JSON file**. In Actions -> Run workflow, set **Verify only = false**, leave **url** blank, and fill **json_source** with either a public direct HTTPS JSON URL or a relative repository file path, e.g. `premium_telegram/input.json`. Set `app_selector` if the JSON contains multiple apps (name, ID, or 1-based index). The file must exist in the repository before running the workflow. You can also store a private JSON URL in `PREMIUM_METADATA_URL` repository Secret instead of entering it into the workflow input.
+
+This parser recognizes common AltStore-style and custom app metadata: top-level app objects, arrays, `apps`, `data.apps`, and common `ipaUrl`/`downloadURL`, `description`/`localizedDescription`, and `iconURL`/`icon` fields. It also looks at `versions[]` when no direct IPA URL exists. **The actual JSON schema must be reviewed before using a large file.** A multi-app file with no selector is rejected rather than uploading an arbitrary app.
+
+The icon image is fetched and converted into a small JPEG before downloading the large IPA. It is passed to Telethon as a document `thumb`; Telegram may still decline or replace a custom document thumbnail. The full description is attached as the IPA caption up to Telegram's 1024 UTF-16-unit limit; any extra description is sent in a follow-up message (maximum 4096 units each). Nothing is intentionally truncated.
+
+Always use `destination = me` to send to your own Saved Messages. **Never place secret-bearing JSON source links into a public workflow input or commit confidential JSON into a public repository.** `PREMIUM_METADATA_URL` can be used for a secret JSON URL.
+
+To validate just the JSON parser without touching Telegram credentials:
+```bash
+python -m unittest discover -s premium_telegram -p test_metadata.py -v
+```

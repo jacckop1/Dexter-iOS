@@ -14,6 +14,7 @@ import requests
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import DocumentAttributeFilename
+from metadata import load_json, write_thumb, caption_segments
 
 PART_SIZE = 512 * 1024
 PREMIUM_MAX_PARTS = 8000
@@ -151,7 +152,8 @@ async def check_premium(api_id: int, api_hash: str, session: str) -> None:
 
 
 async def upload_to_telegram(api_id: int, api_hash: str, session: str,
-                             target: Path, destination: str) -> None:
+                             target: Path, destination: str,
+                             description: str = "", thumb_path: Path | None = None) -> None:
     client = TelegramClient(StringSession(session), api_id, api_hash,
                             connection_retries=5, request_retries=5, timeout=30)
     await client.connect()
@@ -173,14 +175,21 @@ async def upload_to_telegram(api_id: int, api_hash: str, session: str,
             progress_callback=on_progress,
         )
         print("All parts uploaded; publishing the document...", flush=True)
+        segments = caption_segments(description)
         sent = await client.send_file(
             destination,
             uploaded,
+            caption=segments[0],
+            thumb=str(thumb_path) if thumb_path else None,
             force_document=True,
+            parse_mode=None,
             attributes=[DocumentAttributeFilename(file_name=target.name)],
         )
         if not sent:
             raise RuntimeError("Telegram returned no sent message")
+        for rest in segments[1:]:
+            await client.send_message(destination, rest, parse_mode=None, link_preview=False)
+        print(f"Description: {len(description)} characters; icon: {'yes' if thumb_path else 'none'}", flush=True)
         print("SUCCESS: IPA delivered by personal Premium account", flush=True)
     finally:
         await client.disconnect()
@@ -193,15 +202,31 @@ def main() -> None:
         print("Verification complete; no file downloaded", flush=True)
         return
 
-    url = (os.getenv("SOURCE_URL_INPUT") or os.getenv("SOURCE_URL_SECRET") or "").strip()
-    if not url:
-        raise RuntimeError("Enter URL in Run workflow or set PREMIUM_SOURCE_URL secret")
+    direct_url = (os.getenv("SOURCE_URL_INPUT") or os.getenv("SOURCE_URL_SECRET") or "").strip()
+    metadata_source = (os.getenv("METADATA_SOURCE_INPUT") or
+                       os.getenv("METADATA_SOURCE_SECRET") or "").strip()
     destination = os.getenv("DESTINATION", "me").strip()
     if destination not in ("me", "@ikiraplus1"):
         raise RuntimeError("Unsupported destination")
+    if direct_url and metadata_source:
+        raise RuntimeError("Choose either a direct IPA URL or JSON metadata source, not both")
 
     with requests.Session() as http:
-        size, name, ranged = inspect_source(http, url, os.getenv("FILE_NAME", "").strip())
+        description = ""
+        icon_url = ""
+        requested_name = os.getenv("FILE_NAME", "").strip()
+        if metadata_source:
+            record = load_json(http, metadata_source, os.getenv("APP_SELECTOR", "").strip())
+            url = record.url
+            description = record.description
+            icon_url = record.icon_url
+            requested_name = requested_name or record.file_name
+            print("Selected one IPA entry from JSON metadata", flush=True)
+        else:
+            url = direct_url
+        if not url:
+            raise RuntimeError("Provide a direct IPA URL or JSON metadata source")
+        size, name, ranged = inspect_source(http, url, requested_name)
         parts = (size + PART_SIZE - 1) // PART_SIZE
         if parts > PREMIUM_MAX_PARTS:
             raise RuntimeError("Too many Telegram parts for Premium")
@@ -210,10 +235,12 @@ def main() -> None:
             free = shutil.disk_usage(temp_dir).free
             if free < size + 512 * 1024 * 1024:
                 raise RuntimeError("Insufficient free disk space on GitHub runner")
+            thumb = write_thumb(http, icon_url, Path(temp_dir) / "app-thumb.jpg") if icon_url else None
             file = Path(temp_dir) / name
             download_source(http, url, file, size, ranged)
             print("Download finished; preparing Telegram transfer", flush=True)
-            asyncio.run(upload_to_telegram(api_id, api_hash, session, file, destination))
+            asyncio.run(upload_to_telegram(api_id, api_hash, session, file, destination,
+                                           description=description, thumb_path=thumb))
     print("Temporary download removed", flush=True)
 
 
