@@ -53,7 +53,7 @@ def prepare(key: str) -> Job:
         if (size + PART_SIZE - 1) // PART_SIZE > MAX_PARTS:
             raise RuntimeError(f"{key}: IPA exceeds Telegram Premium part limit")
         return Job(key=key, name=item.name, url=item.url, filename=filename,
-                   size=size, note=item.description, icon=item.icon)
+                   size=size, note=item.description, icon=item.icon_url)
 
 
 def download_job(job: Job, folder: Path) -> tuple[Path, Path]:
