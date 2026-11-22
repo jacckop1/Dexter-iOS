@@ -61,7 +61,15 @@ def download_job(job: Job, folder: Path) -> tuple[Path, Path]:
         thumb = write_thumb(http, job.icon, folder / f"{job.key}-thumb.jpg")
         file = folder / job.filename
         print(f"[{job.key}] Thumbnail ready; downloading {job.size:,} bytes", flush=True)
-        fast_download(job.url, file, job.size, label=job.key, connections=8)
+        # GL's upstream was repeatedly stalling with eight long-lived ranges.
+        # Use fewer requests and smaller ranges on GL; keep KR at high speed.
+        gl_source = job.key == "gl"
+        fast_download(
+            job.url, file, job.size, label=job.key,
+            connections=2 if gl_source else 8,
+            block_size=(8 if gl_source else 32) * 1024 * 1024,
+            idle_seconds=55 if gl_source else 30,
+        )
         if file.stat().st_size != job.size:
             raise RuntimeError(f"{job.key}: downloaded file size does not match expected size")
         return file, thumb

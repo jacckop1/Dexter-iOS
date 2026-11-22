@@ -89,8 +89,14 @@ def fast_download(url: str, target: Path, expected: int, *, label: str = "",
                         if time.monotonic() >= deadline:
                             raise RuntimeError(f"[{label}] Download deadline reached")
 
+                        # After repeated timeouts, split the remaining work
+                        # into smaller HTTP requests without discarding bytes.
+                        request_end = (
+                            min(high, offset + 2 * 1024 * 1024 - 1)
+                            if consecutive_errors >= 2 else high
+                        )
                         headers = {
-                            "Range": f"bytes={offset}-{high}",
+                            "Range": f"bytes={offset}-{request_end}",
                             "Accept-Encoding": "identity",
                             "User-Agent": "Mozilla/5.0",
                         }
@@ -112,7 +118,7 @@ def fast_download(url: str, target: Path, expected: int, *, label: str = "",
                                 else:
                                     if not _content_range_valid(
                                         response.headers.get("content-range", ""),
-                                        offset, high, expected
+                                        offset, request_end, expected
                                     ):
                                         raise RuntimeError(f"[{label}] Source Content-Range mismatch")
                                     if response.headers.get("content-type", "").lower().startswith("text/html"):
@@ -123,7 +129,7 @@ def fast_download(url: str, target: Path, expected: int, *, label: str = "",
                                             return
                                         if not chunk:
                                             continue
-                                        if offset + len(chunk) > high + 1:
+                                        if offset + len(chunk) > request_end + 1:
                                             raise RuntimeError(f"[{label}] Source exceeded requested HTTP range")
                                         # os.pwrite is Linux-specific, so parallel ranges never
                                         # move a shared file pointer or overwrite other blocks.
@@ -135,6 +141,12 @@ def fast_download(url: str, target: Path, expected: int, *, label: str = "",
                                             written += n
                                         offset += len(chunk)
                                         mark(len(chunk))
+                                    # A shortened request may finish before the
+                                    # original assigned range does: immediately
+                                    # continue from the new offset, no penalty.
+                                    if offset > request_end:
+                                        consecutive_errors = 0
+                                        continue
                                     if offset <= high:
                                         interrupted = True
                         except requests.RequestException as error:
