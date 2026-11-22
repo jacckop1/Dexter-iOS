@@ -122,7 +122,7 @@ def download_resumable(session: requests.Session, url: str, target: Path,
 
 
 async def upload_big_parts(client, path: Path, concurrency: int = 3,
-                           max_seconds: int = MAX_UPLOAD_SECONDS) -> types.InputFileBig:
+                           max_seconds: int = MAX_UPLOAD_SECONDS, label: str = "") -> types.InputFileBig:
     """A failed 512 KiB Telegram part is retried in-place, not from part zero.
 
     Concurrent part requests are idempotent for a fixed file_id/index/payload.
@@ -175,11 +175,12 @@ async def upload_big_parts(client, path: Path, concurrency: int = 3,
                         message = str(error)
                         if (name in {"FilePartsInvalidError", "FilePartInvalidError",
                                      "FilePartSizeInvalidError", "FilePartTooBigError",
-                                     "AuthKeyUnregisteredError", "SessionRevokedError",
+                                     "AuthKeyUnregisteredError", "AuthKeyDuplicatedError", "SessionRevokedError",
                                      "UserDeactivatedError"} or
                                 "FILE_PARTS_INVALID" in message or
                                 "FILE_PART_SIZE_INVALID" in message or
-                                "AUTH_KEY_UNREGISTERED" in message):
+                                "AUTH_KEY_UNREGISTERED" in message or
+                                "AUTH_KEY_DUPLICATED" in message):
                             raise RuntimeError(f"Unrecoverable Telegram error: {name}") from None
                         attempt += 1
                         wait_s = min(45, 1.5 * (2 ** min(attempt - 1, 5)))
@@ -187,7 +188,7 @@ async def upload_big_parts(client, path: Path, concurrency: int = 3,
                         if isinstance(specified, (int, float)) and specified > 0:
                             wait_s = max(wait_s, float(specified) + 2)
                         if attempt == 1 or attempt % 5 == 0:
-                            print(f"Telegram part {part + 1}/{parts} interrupted ({name}); "
+                            print(f"[{label}] Telegram part {part + 1}/{parts} interrupted ({name}); "
                                   f"retrying same part (attempt {attempt})", flush=True)
                         if time.monotonic() + wait_s >= deadline:
                             raise RuntimeError("Telegram upload retry deadline reached") from None
@@ -197,11 +198,11 @@ async def upload_big_parts(client, path: Path, concurrency: int = 3,
                     done += 1
                     mark = min(100, done * 100 // parts // 5 * 5)
                     if mark > last_mark:
-                        print(f"Telegram acknowledged: {mark}% ({done:,}/{parts:,} parts)", flush=True)
+                        print(f"[{label}] Telegram acknowledged: {mark}% ({done:,}/{parts:,} parts)", flush=True)
                         last_mark = mark
 
     await asyncio.gather(*(worker(i) for i in range(concurrency)))
     if done != parts:
         raise RuntimeError("Telegram part acknowledgement mismatch")
-    print(f"All {parts:,} Telegram parts acknowledged", flush=True)
+    print(f"[{label}] All {parts:,} Telegram parts acknowledged", flush=True)
     return types.InputFileBig(id=file_id, parts=parts, name=path.name)

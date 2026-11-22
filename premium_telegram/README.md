@@ -123,15 +123,16 @@ Their `note` is used verbatim as the document caption. Their `icon` is fetched a
 
 **No live transfer has been started by this code change.** Run the manual workflow to upload. If one job fails, retry just that game; successful files should not be uploaded twice.
 
-## Parallel runs and interruption resilience (2026-11-22)
+## Concurrent PUBG transfers and failure recovery (2026-11-22)
 
-The PUBG preset now launches **GL and KR concurrently** in separate Ubuntu runners when you choose `both`. Each one uses independent disk and network resources and posts to your own Saved Messages.
+The PUBG preset uploads GL and KR **concurrently inside one GitHub runner using one Telegram StringSession and one shared TelegramClient**. This is intentional: using the same StringSession on two different runners can cause Telegram's AUTH_KEY_DUPLICATED and permanently revoke the key.
 
-- The downloader REQUIRES the original source to support HTTP Range, and always requests `bytes=<current saved offset>-`. On disconnections, early EOF, 429, 503 and other temporary errors it retries from **the byte already on the current runner**, without truncating downloaded bytes. Network idle beyond 35 seconds triggers a reconnect.
-- The Telegram uploader saves 512 KiB MTProto parts with up to three in-flight worker lanes. Any failed individual part is retried with the **same file ID, part number, and bytes**, rather than restarting the whole upload. Retries are bounded by time limits and fatal account/file errors abort.
-- The current script and temporary files live only on each GitHub runner. **A cancelled GitHub Action, a runner crash, or a re-run from GitHub Actions creates a fresh runner and DOES restart from zero.** A durable external object store would be necessary to resume across full job re-runs. There is no honest technical guarantee of never failing.
-- Telegram uploaded parts may expire after a limited time, so too-slow uploads can still fail at final sending. Very large uploads should be completed promptly.
-- The download stage has a 3-hour retry budget, Telegram part upload a 3-hour retry budget, and GitHub's job has a 350-minute hard limit. These are not additive guarantees.
-- The dedicated test `test_resilient_transfer.py` simulates a cut connection plus a 503 and verifies the next request resumes at exactly 1,048,576 bytes.
+- Both IPA sources are downloaded concurrently on separate Python threads. HTTP Range is **mandatory**, and the downloader resumes from the byte already saved locally after a dropped connection, slow response, transient 5xx or 429. It never discards the partially downloaded file to restart from zero.
+- After download, each game's MTProto upload has two in-flight part requests using the one shared client. Failed 512 KiB parts are retried with identical file ID and part index without restarting successful parts. Progress logs label the game (`[gl]` / `[kr]`).
+- One GitHub runner must have enough **free space** for both IPAs plus 768 MiB overhead. A size check occurs before download. If it fails, run `gl` and `kr` one at a time.
+- The 350-minute GitHub job time limit, 3-hour download retry budget and 3-hour Telegram upload retry budget remain. A cancelled job, a runner crash, a link that permanently expires, or Telegram's temporary file-part expiration cannot be prevented. **A new GitHub run cannot resume old temporary bytes**, because they were stored only on the previous runner; persistent object storage would be needed for that.
+- Tests `test_resilient_transfer.py` and `test_telegram_part_retry.py` simulate an interrupted HTTP download and a failed Telegram part, with no live Telegram account needed.
 
-**Start**: Actions -> Upload PUBG GL + KR to Saved Messages -> Run workflow -> `game=both`, `verify_only=false`. A single click schedules two concurrent jobs; no workflow was automatically dispatched when editing the repository.
+### Start
+
+Go to Actions -> Upload PUBG GL + KR to Saved Messages -> Run workflow. Select `game=both`, set `verify_only=false`, and dispatch once. The workflow will download both games and deliver each to Saved Messages under the specified exact filename, note and thumbnail. **Do not dispatch the generic uploader or a second PUBG workflow simultaneously using this same StringSession.** You can use `gl` or `kr` separately if one game needs retry. No live transfer has been started automatically just by editing the repository.

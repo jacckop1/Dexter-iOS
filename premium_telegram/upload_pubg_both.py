@@ -69,7 +69,7 @@ def download_job(job: Job, folder: Path) -> tuple[Path, Path]:
 async def upload_job(client, job: Job, folder: Path) -> None:
     file, thumb = await asyncio.to_thread(download_job, job, folder)
     print(f"[{job.key}] Full IPA downloaded; starting MTProto part upload", flush=True)
-    uploaded = await upload_big_parts(client, file, concurrency=2)
+    uploaded = await upload_big_parts(client, file, concurrency=2, label=job.key)
     print(f"[{job.key}] Parts uploaded; sending to Saved Messages", flush=True)
     chunks = caption_segments(job.note)
     message = await client.send_file(
