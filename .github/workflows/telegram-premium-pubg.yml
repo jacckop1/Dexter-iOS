@@ -1,0 +1,65 @@
+name: Upload PUBG GL + KR to Saved Messages
+run-name: "PUBG Premium: ${{ inputs.game }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: "Upload BOTH games or just one"
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - gl
+          - kr
+      verify_only:
+        description: "Only verify Premium login; do not upload"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: one-off-telegram-premium-pubg
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: "PUBG ${{ matrix.game }} to Saved Messages"
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        game: ${{ fromJSON(inputs.game == 'both' && '["gl","kr"]' || format('["{0}"]', inputs.game)) }}
+    env:
+      TG_API_ID: ${{ secrets.TG_API_ID }}
+      TG_API_HASH: ${{ secrets.TG_API_HASH }}
+      TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}
+      PUBG_TARGET: ${{ matrix.game }}
+      DESTINATION: me
+      VERIFY_ONLY: ${{ inputs.verify_only }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Check out trusted repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r premium_telegram/requirements.txt
+
+      - name: Validate JSON parser and fixed PUBG entries
+        run: python -m unittest discover -s premium_telegram -p test_metadata.py -v
+
+      - name: Verify Premium and upload selected PUBG IPA
+        run: python premium_telegram/uploader.py

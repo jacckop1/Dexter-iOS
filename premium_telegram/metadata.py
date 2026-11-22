@@ -18,7 +18,7 @@ URL_KEYS = ("ipaUrl", "ipaURL", "ipa_url", "downloadURL", "downloadUrl",
             "download_url", "downloadLink", "fileUrl", "file_url", "url")
 ICON_KEYS = ("iconURL", "iconUrl", "icon_url", "icon", "artworkURL",
              "artworkUrl", "imageURL", "imageUrl", "image", "logo")
-DESCRIPTION_KEYS = ("description", "localizedDescription", "appDescription",
+DESCRIPTION_KEYS = ("note", "description", "localizedDescription", "appDescription",
                     "longDescription", "notes", "subtitle")
 NAME_KEYS = ("name", "title", "appName")
 FILE_NAME_KEYS = ("fileName", "filename", "file_name")
@@ -32,6 +32,7 @@ class IpaMetadata:
     icon_url: str = ""
     file_name: str = ""
     name: str = ""
+    version: str = ""
 
 
 def _str(value) -> str:
@@ -123,7 +124,7 @@ def extract_item(payload, selector: str = "") -> IpaMetadata:
         if clean_name:
             filename = (clean_name + (f" - v{clean_version.lstrip('vV')}" if clean_version else "") + ".ipa")
     return IpaMetadata(url=url, description=description, icon_url=icon_url,
-                       file_name=filename, name=name)
+                       file_name=filename, name=name, version=version)
 
 
 def _read_bounded(response, max_bytes: int) -> bytes:

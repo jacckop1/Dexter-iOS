@@ -202,13 +202,27 @@ def main() -> None:
         print("Verification complete; no file downloaded", flush=True)
         return
 
+    pubg_target = os.getenv("PUBG_TARGET", "").strip().lower()
+    allowed_pubg = {
+        "gl": ("APP-5874636765", "Pubg GL Hack"),
+        "kr": ("APP-1167550679", "Pubg KR Hack"),
+    }
+    if pubg_target and pubg_target not in allowed_pubg:
+        raise RuntimeError("Only PUBG GL Hack or PUBG KR Hack is permitted in this workflow")
+
     direct_url = (os.getenv("SOURCE_URL_INPUT") or os.getenv("SOURCE_URL_SECRET") or "").strip()
     metadata_source = (os.getenv("METADATA_SOURCE_INPUT") or
                        os.getenv("METADATA_SOURCE_SECRET") or "").strip()
     destination = os.getenv("DESTINATION", "me").strip()
     if destination not in ("me", "@ikiraplus1"):
         raise RuntimeError("Unsupported destination")
-    if direct_url and metadata_source:
+    if pubg_target:
+        if direct_url or metadata_source or os.getenv("FILE_NAME", "").strip():
+            raise RuntimeError("PUBG workflow accepts no external source or file-name override")
+        if destination != "me":
+            raise RuntimeError("PUBG workflow sends to Saved Messages only")
+        metadata_source = "premium_telegram/pubg_targets.json"
+    elif direct_url and metadata_source:
         raise RuntimeError("Choose either a direct IPA URL or JSON metadata source, not both")
 
     with requests.Session() as http:
@@ -216,7 +230,18 @@ def main() -> None:
         icon_url = ""
         requested_name = os.getenv("FILE_NAME", "").strip()
         if metadata_source:
-            record = load_json(http, metadata_source, os.getenv("APP_SELECTOR", "").strip())
+            record = load_json(http, metadata_source,
+                               allowed_pubg[pubg_target][0] if pubg_target
+                               else os.getenv("APP_SELECTOR", "").strip())
+            if pubg_target:
+                expected_id, expected_name = allowed_pubg[pubg_target]
+                if record.name != expected_name or not record.version:
+                    raise RuntimeError("PUBG JSON entry does not match the allowed game or lacks version")
+                if not record.description or not record.icon_url:
+                    raise RuntimeError("PUBG JSON entry requires note and icon")
+                requested_name = filename_safe(
+                    f"{record.name} - {record.version} [ @iKiraPlus ].ipa"
+                )
             url = record.url
             description = record.description
             icon_url = record.icon_url

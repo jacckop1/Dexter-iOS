@@ -103,3 +103,22 @@ To validate just the JSON parser without touching Telegram credentials:
 ```bash
 python -m unittest discover -s premium_telegram -p test_metadata.py -v
 ```
+
+## One-off PUBG GL / KR preset (from supplied jom (56).json)
+
+**Use [Upload PUBG GL + KR to Saved Messages](../.github/workflows/telegram-premium-pubg.yml)** for the two specific games only. It does not need a JSON URL or additional secrets; `premium_telegram/pubg_targets.json` contains ONLY the two extracted current records from the provided 2026-11-22 user JSON.
+
+- `game = both`: GL and KR as two separate sequential GitHub Actions jobs (one runner at a time).
+- `game = gl` or `kr`: run one selected game if retry needed.
+- `verify_only = true`: verifies account and runs parser tests, without any IPA download.
+- `verify_only = false`: downloads/ships the current `ipaUrl` to **Saved Messages only**.
+
+Only the whitelisted IDs **APP-5874636765** and **APP-1167550679** are allowed. The script rejects other game names, overrides, alternate upload destinations, or missing note/icon/version. It never looks at `previousVersions`.
+
+The exact filenames are:
+- `Pubg GL Hack - 4.7.0 [ @iKiraPlus ].ipa`
+- `Pubg KR Hack - 4.7.0 [ @iKiraPlus ].ipa`
+
+Their `note` is used verbatim as the document caption. Their `icon` is fetched and attached as a document thumbnail; Telegram ultimately controls its display. Neither file nor icon is added to GitHub Releases or artifacts. Files are removed from the temporary runner disk after the job. See original JSON `ipaUrl` links in `pubg_targets.json`.
+
+**No live transfer has been started by this code change.** Run the manual workflow to upload. If one job fails, retry just that game; successful files should not be uploaded twice.

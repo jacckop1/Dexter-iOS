@@ -12,6 +12,27 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(item.file_name, "Great Game - v1.2.ipa")
         self.assertEqual(item.description, "Line one\nLine two")
         self.assertEqual(item.icon_url, "https://example.org/icon.png")
+        self.assertEqual(item.version, "1.2")
+
+    def test_pubg_targets_only_main_url_note_icon(self):
+        import json
+        from pathlib import Path
+        fixture = json.loads((Path(__file__).parent / "pubg_targets.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(fixture["apps"]), 2)
+        expected = {
+            "APP-5874636765": ("Pubg GL Hack", "https://dl.ikiraplus.workers.dev/dl/pubg-hack-gl-v4.7.0"),
+            "APP-1167550679": ("Pubg KR Hack", "https://dl.ikiraplus.workers.dev/dl/pubg-hack-kr-v4.7.0"),
+        }
+        for app_id, (name, url) in expected.items():
+            item = extract_item(fixture, app_id)
+            raw = next(app for app in fixture["apps"] if app["id"] == app_id)
+            self.assertEqual(item.url, url)
+            self.assertEqual(item.name, name)
+            self.assertEqual(item.version, "4.7.0")
+            self.assertEqual(item.description, raw["note"])
+            self.assertEqual(item.icon_url, raw["icon"])
+            self.assertEqual(f"{item.name} - {item.version} [ @iKiraPlus ].ipa",
+                             f"{name} - 4.7.0 [ @iKiraPlus ].ipa")
 
     def test_catalog_selector(self):
         data = {"apps": [
