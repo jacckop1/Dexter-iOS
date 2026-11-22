@@ -37,6 +37,23 @@ MANIFEST = Path(__file__).with_name("games.json")
 MAX_FILE_BYTES = PART_SIZE * MAX_PARTS
 ICON_MAX_BYTES = 5 * 1024 * 1024
 
+# Only the intended two exclusive batches are supported.
+BATCH_SLICES = {
+    "first_two": slice(0, 2),
+    "last_three": slice(2, 5),
+}
+
+
+def selected_games(games: list["Game"], batch: str) -> list["Game"]:
+    if batch not in BATCH_SLICES:
+        raise RuntimeError("Invalid batch: choose first_two or last_three")
+    if len(games) != 5:
+        raise RuntimeError("Expected exactly five configured games")
+    selected = games[BATCH_SLICES[batch]]
+    if len(selected) not in (2, 3):
+        raise RuntimeError("Unexpected number of selected games")
+    return selected
+
 
 @dataclass(frozen=True)
 class Game:
@@ -161,12 +178,9 @@ async def send_games() -> None:
             raise RuntimeError("Active PERSONAL Telegram Premium account required")
         print("Authorized personal Telegram Premium account", flush=True)
 
-        if os.getenv("VERIFY_ONLY", "true").lower() == "true":
-            print("Verify-only: no IPA files downloaded, no messages sent", flush=True)
-            return
-
-        games = load_games()
-        print(f"Manifest validated: {len(games)} game(s); destination = Saved Messages", flush=True)
+        batch = os.getenv("GAME_BATCH", "").strip()
+        games = selected_games(load_games(), batch)
+        print(f"Selected {batch}: {len(games)} game(s) -> Saved Messages", flush=True)
         failures = []
         for i, game in enumerate(games, 1):
             label = f"switch-{i}"
@@ -188,13 +202,13 @@ async def send_games() -> None:
                             fast_download,
                             game.url, out, expected,
                             label=label,
-                            connections=3, block_size=4 * 1024 * 1024,
+                            connections=8, block_size=8 * 1024 * 1024,
                             idle_seconds=30
                         )
                         if out.stat().st_size != expected:
                             raise RuntimeError("Size mismatch after download")
                         print(f"[{label}] Download complete; uploading in 512-KiB Telegram parts", flush=True)
-                        uploaded = await upload_big_parts(client, out, concurrency=4, label=label)
+                        uploaded = await upload_big_parts(client, out, concurrency=6, label=label)
                         msg = await client.send_file(
                             "me", uploaded,
                             caption=CAPTION, thumb=str(thumb) if thumb else None,

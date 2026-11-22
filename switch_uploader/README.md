@@ -1,11 +1,19 @@
-# One-off Nintendo Switch IPA uploader
+# Nintendo Switch IPA uploads to personal Telegram Saved Messages
 
-This is the **only** workflow installed for this one-off batch. It runs only
-when manually started in GitHub Actions. It sends IPA documents to **your
-own Telegram Saved Messages** using a **personal Telegram Premium session**,
-not a Telegram bot.
+This one-off uploader runs ONLY on manually dispatched GitHub Actions and
+presents an exclusive batch selector. It does not create a Telegram bot.
 
-## Fixed caption (identical for every game)
+## Pick one batch in GitHub Actions
+
+- `first_two`: **Solateria 1.0.5** + **Ready or Nowhere 1.0.0-1**
+- `last_three`: **Mario vs. Donkey Kong 1.0.1** + **Cult of the Lamb 1.5.27** + **Super Mario 3D World + Bowser's Fury 1.2.2**
+
+All five URLs and icons are in `switch_uploader/games.json` in that exact order.
+The workflow validates the chosen batch and transfers only those selected.
+Select the other batch in a separate run. Only one run is active at a time
+because the workflow shares a personal Telegram StringSession.
+
+## Fixed Telegram caption on every file
 
 ```text
 لعبة نينتندو سويتش حصرية.
@@ -15,47 +23,37 @@ not a Telegram bot.
 - قد تحتوي تحميل داخلي.
 ```
 
-File naming: `Game Name - Version [ @iKiraPlus ].ipa`
+Filenames are `Name - Version [ @iKiraPlus ].ipa`. Each file is sent as a
+document with the given thumbnail (when available) to **Saved Messages**.
 
-Populate `switch_uploader/games.json` with game entries (name, version, URL,
-optional icon URL). Example:
+## Start
 
-```json
-{
-  "games": [
-    {
-      "name": "Example Game",
-      "version": "1.0",
-      "url": "https://example.com/example.ipa",
-      "icon": "https://example.com/icon.png"
-    }
-  ]
-}
-```
+1. Ensure GitHub Actions is enabled for this repo, and the Actions Secrets
+   `TG_API_ID`, `TG_API_HASH`, `TG_STRING_SESSION` are configured. They
+   must be a **personal Premium account** session, not a bot.
+2. Open **Actions > Nintendo Switch IPA to Saved Messages > Run workflow**.
+3. Choose `first_two` or `last_three` and press **Run workflow** once.
 
-The placeholder file has an empty list until actual links arrive. Uploading
-requires a known content length and HTTP Range support. A source that lacks
-Range is rejected before downloading a multi-GB IPA.
+No download is triggered by pushing this edit. The workflow tests the list
+and batch selection before starting the network transfer. It will reject
+sources without HTTP Range support or a reliable expected byte count.
 
-## Credentials and execution
+## Throughput and constraints
 
-Store `TG_API_ID`, `TG_API_HASH`, and `TG_STRING_SESSION` as GitHub Actions
-**repository secrets**. If previously deleted, create a fresh Telegram
-session and add the secrets again. Do not send the session string in chat.
+The downloader uses up to **eight simultaneous 8-MiB HTTP Range connections**
+per game (compared to three before); stalled ranges retry their missing
+bytes, eventually switching to 1-MiB requests. The uploader uses **six
+concurrent 512-KiB Telegram upload part lanes**, the maximum supported by
+the included resilient_transfer implementation. Both show 5% progress
+notices with average throughput and ETA.
 
-Go to **Actions -> Nintendo Switch IPA to Saved Messages -> Run workflow**,
-uncheck `Verify only`, and submit once. Each game downloads and uploads
-in turn on ONE GitHub runner and ONE Telegram session. Each file is
-automatically removed after its upload to keep disk usage low.
+Games are downloaded, uploaded and deleted one by one to fit typical
+GitHub-hosted runner disk budgets. This is an intentional disk safeguard;
+whole-game downloads are not parallel. Actual throughput depends on each
+source, Cloudflare Worker behavior, Telegram, and GitHub network limits.
+More parallel requests may trigger source rate limits; retry logic handles
+many transient disconnects but does not guarantee delivery. No partial file
+state survives cancellation or a new runner.
 
-Progress is logged in 5% intervals for download and MTProto uploads.
-Network disconnects retry the current HTTP Range / 512-KiB Telegram part
-within the same running job. Cancelling the job or losing the GitHub runner
-loses locally downloaded chunks; they do not persist between job runs.
-GitHub Actions runner and Telegram have size and time limits. Actual speed
-depends on the host, runner and bandwidth; no delivery is guaranteed.
-
-The previous Dexter iOS application source files remain intact. The old
-Telegram upload and iOS-build workflows are NOT restored. After completion,
-remove this temporary workflow, delete stored secrets and terminate the
-Telegram session if no longer needed.
+After both batches are delivered, remove the workflow and credentials,
+and terminate the temporary session under Telegram Settings > Devices.

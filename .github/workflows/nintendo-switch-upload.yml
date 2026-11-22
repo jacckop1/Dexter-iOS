@@ -1,14 +1,17 @@
 name: Nintendo Switch IPA to Saved Messages
-run-name: "Nintendo Switch IPA batch"
+run-name: "Nintendo Switch IPA: ${{ inputs.batch }}"
 
 on:
   workflow_dispatch:
     inputs:
-      verify_only:
-        description: "Only verify Telegram Premium login; uncheck to upload"
+      batch:
+        description: "Select which games to download and upload"
         required: true
-        default: true
-        type: boolean
+        default: first_two
+        type: choice
+        options:
+          - first_two
+          - last_three
 
 permissions:
   contents: read
@@ -19,14 +22,14 @@ concurrency:
 
 jobs:
   send-games:
-    name: "Upload Nintendo Switch IPAs (fixed caption)"
+    name: "Upload selected Switch IPAs - fast ranged downloads"
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
       TG_API_ID: ${{ secrets.TG_API_ID }}
       TG_API_HASH: ${{ secrets.TG_API_HASH }}
       TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}
-      VERIFY_ONLY: ${{ inputs.verify_only }}
+      GAME_BATCH: ${{ inputs.batch }}
       PYTHONUNBUFFERED: "1"
     steps:
       - name: Checkout
@@ -45,5 +48,5 @@ jobs:
       - name: Offline tests
         run: python -m unittest discover -s switch_uploader -p 'test_*.py' -v
 
-      - name: Upload configured games
+      - name: Upload chosen batch only
         run: python switch_uploader/upload.py
