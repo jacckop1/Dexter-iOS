@@ -122,3 +122,16 @@ The exact filenames are:
 Their `note` is used verbatim as the document caption. Their `icon` is fetched and attached as a document thumbnail; Telegram ultimately controls its display. Neither file nor icon is added to GitHub Releases or artifacts. Files are removed from the temporary runner disk after the job. See original JSON `ipaUrl` links in `pubg_targets.json`.
 
 **No live transfer has been started by this code change.** Run the manual workflow to upload. If one job fails, retry just that game; successful files should not be uploaded twice.
+
+## Parallel runs and interruption resilience (2026-11-22)
+
+The PUBG preset now launches **GL and KR concurrently** in separate Ubuntu runners when you choose `both`. Each one uses independent disk and network resources and posts to your own Saved Messages.
+
+- The downloader REQUIRES the original source to support HTTP Range, and always requests `bytes=<current saved offset>-`. On disconnections, early EOF, 429, 503 and other temporary errors it retries from **the byte already on the current runner**, without truncating downloaded bytes. Network idle beyond 35 seconds triggers a reconnect.
+- The Telegram uploader saves 512 KiB MTProto parts with up to three in-flight worker lanes. Any failed individual part is retried with the **same file ID, part number, and bytes**, rather than restarting the whole upload. Retries are bounded by time limits and fatal account/file errors abort.
+- The current script and temporary files live only on each GitHub runner. **A cancelled GitHub Action, a runner crash, or a re-run from GitHub Actions creates a fresh runner and DOES restart from zero.** A durable external object store would be necessary to resume across full job re-runs. There is no honest technical guarantee of never failing.
+- Telegram uploaded parts may expire after a limited time, so too-slow uploads can still fail at final sending. Very large uploads should be completed promptly.
+- The download stage has a 3-hour retry budget, Telegram part upload a 3-hour retry budget, and GitHub's job has a 350-minute hard limit. These are not additive guarantees.
+- The dedicated test `test_resilient_transfer.py` simulates a cut connection plus a 503 and verifies the next request resumes at exactly 1,048,576 bytes.
+
+**Start**: Actions -> Upload PUBG GL + KR to Saved Messages -> Run workflow -> `game=both`, `verify_only=false`. A single click schedules two concurrent jobs; no workflow was automatically dispatched when editing the repository.

@@ -15,6 +15,7 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import DocumentAttributeFilename
 from metadata import load_json, write_thumb, caption_segments
+from resilient_transfer import download_resumable, upload_big_parts
 
 PART_SIZE = 512 * 1024
 PREMIUM_MAX_PARTS = 8000
@@ -79,52 +80,10 @@ def inspect_source(session: requests.Session, url: str, override: str) -> tuple[
 
 def download_source(session: requests.Session, url: str, target: Path,
                     expected: int, ranged: bool) -> None:
-    last_mark = -1
-    for attempt in range(1, ATTEMPTS + 1):
-        offset = target.stat().st_size if target.exists() else 0
-        if offset and not ranged:
-            target.unlink()
-            offset = 0
-        headers = {"Accept-Encoding": "identity", "User-Agent": "Mozilla/5.0"}
-        if offset:
-            headers["Range"] = f"bytes={offset}-"
-        try:
-            with session.get(url, headers=headers, stream=True, timeout=TIMEOUT) as response:
-                if response.status_code not in (200, 206):
-                    raise RuntimeError(f"Source returned HTTP {response.status_code}")
-                if offset:
-                    if response.status_code != 206:
-                        raise RuntimeError("Source ignored Range during resume; refusing corrupt output")
-                    content_range = response.headers.get("content-range", "")
-                    if not content_range.lower().startswith(f"bytes {offset}-"):
-                        raise RuntimeError("Source sent wrong Content-Range during resume")
-                elif response.status_code == 206:
-                    if not response.headers.get("content-range", "").lower().startswith("bytes 0-"):
-                        raise RuntimeError("Source sent wrong initial Content-Range")
-                with target.open("ab") as output:
-                    for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                        if not chunk:
-                            continue
-                        output.write(chunk)
-                        done = output.tell()
-                        if done > expected:
-                            raise RuntimeError("Source exceeded declared file size; stopped")
-                        mark = min(100, (done * 100 // expected) // 5 * 5)
-                        if mark > last_mark:
-                            last_mark = mark
-                            print(f"Download: {mark}% ({done:,}/{expected:,} bytes)", flush=True)
-            done = target.stat().st_size
-            if done == expected:
-                return
-            if done > expected:
-                raise RuntimeError("Downloaded file exceeds expected size")
-            print(f"Download incomplete; retry {attempt}/{ATTEMPTS}", flush=True)
-        except requests.RequestException as exc:
-            # Do not print exception text: signed source URLs may be embedded in it.
-            print(f"Download connection issue ({type(exc).__name__}); attempt {attempt}/{ATTEMPTS}", flush=True)
-        if attempt < ATTEMPTS:
-            time.sleep(min(20, 2 ** attempt))
-    raise RuntimeError("Could not download the complete source after retries")
+    if not ranged:
+        raise RuntimeError("Source does not support Range; refusing unsafe restart from zero")
+    download_resumable(session, url, target, expected)
+
 
 
 def auth_values() -> tuple[int, str, str]:
@@ -170,10 +129,13 @@ async def upload_to_telegram(api_id: int, api_hash: str, session: str,
                 print(f"Telegram upload: {mark}%", flush=True)
 
         print("Starting MTProto upload with 512 KiB parts", flush=True)
-        uploaded = await client.upload_file(
-            str(target), part_size_kb=512, file_name=target.name,
-            progress_callback=on_progress,
-        )
+        if target.stat().st_size > 10 * 1024 * 1024:
+            uploaded = await upload_big_parts(client, target, concurrency=3)
+        else:
+            uploaded = await client.upload_file(
+                str(target), part_size_kb=512, file_name=target.name,
+                progress_callback=on_progress,
+            )
         print("All parts uploaded; publishing the document...", flush=True)
         segments = caption_segments(description)
         sent = await client.send_file(
@@ -253,6 +215,8 @@ def main() -> None:
             raise RuntimeError("Provide a direct IPA URL or JSON metadata source")
         size, name, ranged = inspect_source(http, url, requested_name)
         parts = (size + PART_SIZE - 1) // PART_SIZE
+        if pubg_target and not ranged:
+            raise RuntimeError("PUBG IPA link does not support Range: cannot guarantee byte-resume")
         if parts > PREMIUM_MAX_PARTS:
             raise RuntimeError("Too many Telegram parts for Premium")
         print(f"Source verified: {name}; {size:,} bytes; {parts:,} parts; Range={ranged}", flush=True)
