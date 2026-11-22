@@ -22,26 +22,21 @@ on:
 permissions:
   contents: read
 
+# Never let two runners use the SAME Telegram StringSession concurrently.
 concurrency:
   group: one-off-telegram-premium-pubg
   cancel-in-progress: false
 
 jobs:
   upload:
-    name: "PUBG ${{ matrix.game }} to Saved Messages"
+    name: "PUBG selected files - one runner/session"
     runs-on: ubuntu-latest
     timeout-minutes: 350
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        game: ${{ fromJSON(inputs.game == 'both' && '["gl","kr"]' || format('["{0}"]', inputs.game)) }}
     env:
       TG_API_ID: ${{ secrets.TG_API_ID }}
       TG_API_HASH: ${{ secrets.TG_API_HASH }}
       TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}
-      PUBG_TARGET: ${{ matrix.game }}
-      DESTINATION: me
+      PUBG_SELECTION: ${{ inputs.game }}
       VERIFY_ONLY: ${{ inputs.verify_only }}
       PYTHONUNBUFFERED: "1"
     steps:
@@ -61,5 +56,5 @@ jobs:
       - name: Validate JSON and reconnect/resume logic
         run: python -m unittest discover -s premium_telegram -p 'test_*.py' -v
 
-      - name: Verify Premium and upload selected PUBG IPA
-        run: python premium_telegram/uploader.py
+      - name: Verify Premium and concurrently transfer PUBG games
+        run: python premium_telegram/upload_pubg_both.py
