@@ -1,0 +1,65 @@
+name: Telegram Premium IPA (manual)
+run-name: "Telegram Premium IPA upload"
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Direct IPA URL; leave empty to use PREMIUM_SOURCE_URL secret"
+        required: false
+        type: string
+      file_name:
+        description: "Optional .ipa file name"
+        required: false
+        type: string
+      destination:
+        description: "Where to send from your Premium account"
+        required: true
+        default: me
+        type: choice
+        options:
+          - me
+          - "@ikiraplus1"
+      verify_only:
+        description: "Only verify Premium login; don't download anything"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temporary-telegram-premium-uploader
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      TG_API_ID: ${{ secrets.TG_API_ID }}
+      TG_API_HASH: ${{ secrets.TG_API_HASH }}
+      TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}
+      SOURCE_URL_INPUT: ${{ inputs.url }}
+      SOURCE_URL_SECRET: ${{ secrets.PREMIUM_SOURCE_URL }}
+      FILE_NAME: ${{ inputs.file_name }}
+      DESTINATION: ${{ inputs.destination }}
+      VERIFY_ONLY: ${{ inputs.verify_only }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Check out only the trusted default branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uploader dependencies
+        run: python -m pip install --disable-pip-version-check -r premium_telegram/requirements.txt
+
+      - name: Check account and optionally upload IPA
+        run: python premium_telegram/uploader.py
