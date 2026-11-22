@@ -138,7 +138,8 @@ async def upload_big_parts(client, path: Path, concurrency: int = 3,
         raise ValueError("Upload concurrency must be 1..6")
     file_id = secrets.randbits(63) or 1
     done = 0
-    last_mark = -1
+    last_mark = 0
+    upload_started = time.monotonic()
     deadline = time.monotonic() + max_seconds
     lock = asyncio.Lock()
 
@@ -197,9 +198,19 @@ async def upload_big_parts(client, path: Path, concurrency: int = 3,
                 async with lock:
                     done += 1
                     mark = min(100, done * 100 // parts // 5 * 5)
-                    if mark > last_mark:
-                        print(f"[{label}] Telegram acknowledged: {mark}% ({done:,}/{parts:,} parts)", flush=True)
-                        last_mark = mark
+                    while mark > last_mark:
+                        last_mark += 5
+                        transferred = min(length, done * PART_SIZE)
+                        elapsed = max(0.001, time.monotonic() - upload_started)
+                        rate = transferred / elapsed / 1048576
+                        eta = int((length - transferred) / (rate * 1048576)) if rate else 0
+                        print(
+                            f"::notice title={label.upper()} Telegram Upload {last_mark}%::"
+                            f"[{label}] Telegram Upload {last_mark}% | "
+                            f"{transferred / 1048576:.1f}/{length / 1048576:.1f} MiB | "
+                            f"{rate:.2f} MiB/s | ETA {eta}s",
+                            flush=True,
+                        )
 
     await asyncio.gather(*(worker(i) for i in range(concurrency)))
     if done != parts:
