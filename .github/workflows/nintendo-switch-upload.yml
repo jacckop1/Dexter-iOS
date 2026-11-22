@@ -1,0 +1,49 @@
+name: Nintendo Switch IPA to Saved Messages
+run-name: "Nintendo Switch IPA batch"
+
+on:
+  workflow_dispatch:
+    inputs:
+      verify_only:
+        description: "Only verify Telegram Premium login; uncheck to upload"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telegram-premium-one-off-switch
+  cancel-in-progress: false
+
+jobs:
+  send-games:
+    name: "Upload Nintendo Switch IPAs (fixed caption)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      TG_API_ID: ${{ secrets.TG_API_ID }}
+      TG_API_HASH: ${{ secrets.TG_API_HASH }}
+      TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}
+      VERIFY_ONLY: ${{ inputs.verify_only }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requirements
+        run: python -m pip install -r switch_uploader/requirements.txt
+
+      - name: Offline tests
+        run: python -m unittest discover -s switch_uploader -p 'test_*.py' -v
+
+      - name: Upload configured games
+        run: python switch_uploader/upload.py
