@@ -18,10 +18,9 @@ class MetadataTests(unittest.TestCase):
         import json
         from pathlib import Path
         fixture = json.loads((Path(__file__).parent / "pubg_targets.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(fixture["apps"]), 2)
+        self.assertEqual(len(fixture["apps"]), 1)
         expected = {
             "APP-5874636765": ("Pubg GL Hack", "https://dl.ikiraplus.workers.dev/dl/pubg-hack-gl-v4.7.0"),
-            "APP-1167550679": ("Pubg KR Hack", "https://dl.ikiraplus.workers.dev/dl/pubg-hack-kr-v4.7.0"),
         }
         for app_id, (name, url) in expected.items():
             item = extract_item(fixture, app_id)

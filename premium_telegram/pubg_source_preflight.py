@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Safe remote HEAD/Range probes of the two fixed PUBG URLs. No user credentials."""
+"""Safe remote HEAD/Range probes of the fixed PUBG GL URL. No user credentials."""
 import traceback
 from pathlib import Path
-from upload_pubg_both import prepare
+from upload_pubg_gl import prepare
 
 failures = []
-for key in ("gl","kr"):
+for key in ("gl",):
     print(f"[{key}] Source inspection starting",flush=True)
     try:
         j=prepare(key)
@@ -13,7 +13,7 @@ for key in ("gl","kr"):
     except Exception as error:
         frames=traceback.extract_tb(error.__traceback__)
         safe=[f"{Path(x.filename).name}:{x.lineno} ({x.name})" for x in frames
-              if Path(x.filename).name in {"upload_pubg_both.py","uploader.py","metadata.py","pubg_source_preflight.py"}]
+              if Path(x.filename).name in {"upload_pubg_gl.py","uploader.py","metadata.py","pubg_source_preflight.py"}]
         print(f"[{key}] ERROR TYPE: {type(error).__name__}",flush=True)
         print(f"[{key}] SOURCE LOCATION: "+" > ".join(safe[-8:]),flush=True)
         if isinstance(error,AttributeError):
@@ -23,4 +23,4 @@ for key in ("gl","kr"):
         failures.append(key)
 if failures:
     raise SystemExit(1)
-print("Both PUBG source preflights successful — no IPAs downloaded",flush=True)
+print("PUBG GL source preflight successful — no IPAs downloaded",flush=True)

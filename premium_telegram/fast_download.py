@@ -92,19 +92,21 @@ def fast_download(url: str, target: Path, expected: int, *, label: str = "",
                         # After repeated timeouts, split the remaining work
                         # into smaller HTTP requests without discarding bytes.
                         request_end = (
-                            min(high, offset + 2 * 1024 * 1024 - 1)
+                            min(high, offset + 1024 * 1024 - 1)
                             if consecutive_errors >= 2 else high
                         )
                         headers = {
                             "Range": f"bytes={offset}-{request_end}",
                             "Accept-Encoding": "identity",
                             "User-Agent": "Mozilla/5.0",
+                            **({"Connection": "close"} if consecutive_errors >= 2 else {}),
                         }
                         interrupted = False
                         retry_after = 0
                         try:
                             with session.get(
-                                url, headers=headers, stream=True, timeout=(20, idle_seconds)
+                                url, headers=headers, stream=True,
+                                timeout=(15, min(idle_seconds, 18) if consecutive_errors >= 2 else idle_seconds)
                             ) as response:
                                 if response.status_code in TRANSIENT:
                                     interrupted = True
@@ -160,7 +162,7 @@ def fast_download(url: str, target: Path, expected: int, *, label: str = "",
                         if not interrupted:
                             raise RuntimeError(f"[{label}] Range stopped without recoverable reason")
                         consecutive_errors += 1
-                        delay = max(retry_after, min(30.0, 1.5 * (2 ** min(consecutive_errors - 1, 5))))
+                        delay = max(retry_after, min(18.0, 1.5 * (2 ** min(consecutive_errors - 1, 5))))
                         if time.monotonic() + delay >= deadline:
                             raise RuntimeError(f"[{label}] Download retry time exceeded")
                         if consecutive_errors == 1 or consecutive_errors % 5 == 0:

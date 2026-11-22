@@ -1,20 +1,11 @@
-name: Upload PUBG GL + KR to Saved Messages
-run-name: "PUBG Premium: ${{ inputs.game }}"
+name: Upload PUBG GL to Saved Messages
+run-name: "PUBG GL Premium Upload"
 
 on:
   workflow_dispatch:
     inputs:
-      game:
-        description: "Upload BOTH games or just one"
-        required: true
-        default: both
-        type: choice
-        options:
-          - both
-          - gl
-          - kr
       verify_only:
-        description: "Only verify Premium login; do not upload"
+        description: "Only verify Premium login - uncheck to upload GL"
         required: true
         default: true
         type: boolean
@@ -22,21 +13,19 @@ on:
 permissions:
   contents: read
 
-# Never let two runners use the SAME Telegram StringSession concurrently.
 concurrency:
-  group: one-off-telegram-premium-pubg
+  group: one-off-telegram-premium-pubg-gl
   cancel-in-progress: false
 
 jobs:
   upload:
-    name: "PUBG selected files - one runner/session"
+    name: "Upload PUBG GL (resume and 5 percent progress)"
     runs-on: ubuntu-latest
     timeout-minutes: 350
     env:
       TG_API_ID: ${{ secrets.TG_API_ID }}
       TG_API_HASH: ${{ secrets.TG_API_HASH }}
       TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}
-      PUBG_SELECTION: ${{ inputs.game }}
       VERIFY_ONLY: ${{ inputs.verify_only }}
       PYTHONUNBUFFERED: "1"
     steps:
@@ -44,17 +33,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-
-      - name: Install Python 3.12
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install dependencies
         run: python -m pip install --disable-pip-version-check -r premium_telegram/requirements.txt
-
-      - name: Validate JSON and reconnect/resume logic
+      - name: Validate GL metadata and retry logic
         run: python -m unittest discover -s premium_telegram -p 'test_*.py' -v
-
-      - name: Verify Premium and concurrently transfer PUBG games (progress every 5%)
-        run: python premium_telegram/upload_pubg_both.py
+      - name: Verify Premium and upload PUBG GL only
+        run: python premium_telegram/upload_pubg_gl.py

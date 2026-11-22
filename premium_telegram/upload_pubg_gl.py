@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""Concurrent PUBG transfers with ONE MTProto client and ONE GitHub runner.
-
-Do not use one StringSession on different runners at the same time.
-"""
+"""Standalone PUBG GL-only uploader using one Premium Telegram session."""
 
 import asyncio
 import os
@@ -24,7 +21,6 @@ from uploader import auth_values, filename_safe, inspect_source
 
 TARGETS = {
     "gl": ("APP-5874636765", "Pubg GL Hack"),
-    "kr": ("APP-1167550679", "Pubg KR Hack"),
 }
 JSON_PATH = "premium_telegram/pubg_targets.json"
 
@@ -61,14 +57,12 @@ def download_job(job: Job, folder: Path) -> tuple[Path, Path]:
         thumb = write_thumb(http, job.icon, folder / f"{job.key}-thumb.jpg")
         file = folder / job.filename
         print(f"[{job.key}] Thumbnail ready; downloading {job.size:,} bytes", flush=True)
-        # GL's upstream was repeatedly stalling with eight long-lived ranges.
-        # Use fewer requests and smaller ranges on GL; keep KR at high speed.
-        gl_source = job.key == "gl"
+        # Bounded small requests reduce source stalls while keeping
+        # multiple independent GL connections in flight.
         fast_download(
-            job.url, file, job.size, label=job.key,
-            connections=2 if gl_source else 8,
-            block_size=(8 if gl_source else 32) * 1024 * 1024,
-            idle_seconds=55 if gl_source else 30,
+            job.url, file, job.size, label="gl",
+            connections=3, block_size=4 * 1024 * 1024,
+            idle_seconds=28,
         )
         if file.stat().st_size != job.size:
             raise RuntimeError(f"{job.key}: downloaded file size does not match expected size")
@@ -78,7 +72,7 @@ def download_job(job: Job, folder: Path) -> tuple[Path, Path]:
 async def upload_job(client, job: Job, folder: Path) -> None:
     file, thumb = await asyncio.to_thread(download_job, job, folder)
     print(f"[{job.key}] Full IPA downloaded; starting MTProto part upload", flush=True)
-    uploaded = await upload_big_parts(client, file, concurrency=3, label=job.key)
+    uploaded = await upload_big_parts(client, file, concurrency=4, label="gl")
     print(f"[{job.key}] Parts uploaded; sending to Saved Messages", flush=True)
     chunks = caption_segments(job.note)
     message = await client.send_file(
@@ -96,10 +90,7 @@ async def upload_job(client, job: Job, folder: Path) -> None:
 
 
 async def main_async() -> None:
-    selected = (os.getenv("PUBG_SELECTION") or "both").strip().lower()
-    if selected not in ("both", "gl", "kr"):
-        raise RuntimeError("Choose only both, gl, or kr")
-    keys = ["gl", "kr"] if selected == "both" else [selected]
+    keys = ["gl"]  # Fixed, not user-overridable.
     api_id, api_hash, session = auth_values()
     client = TelegramClient(StringSession(session), api_id, api_hash,
                             connection_retries=10, request_retries=6,
@@ -124,8 +115,8 @@ async def main_async() -> None:
             required = sum(job.size for job in jobs) + 768 * 1024 * 1024
             if free < required:
                 raise RuntimeError(
-                    f"Insufficient disk for both games: {free:,} B available; "
-                    f"{required:,} B required. Choose one game at a time."
+                    f"Insufficient disk for PUBG GL: {free:,} B available; "
+                    f"{required:,} B required."
                 )
             results = await asyncio.gather(
                 *(upload_job(client, job, folder) for job in jobs),
@@ -141,7 +132,7 @@ async def main_async() -> None:
             if failures:
                 raise RuntimeError("Incomplete game(s): " + ", ".join(failures) +
                                    ". Successful files may already be in Saved Messages.")
-            print("ALL REQUESTED PUBG FILES DELIVERED", flush=True)
+            print("PUBG GL IPA DELIVERED TO SAVED MESSAGES", flush=True)
     finally:
         await client.disconnect()
 
@@ -156,7 +147,7 @@ if __name__ == "__main__":
         frames = traceback.extract_tb(error.__traceback__)
         safe = [f"{Path(frame.filename).name}:{frame.lineno} in {frame.name}"
                 for frame in frames if Path(frame.filename).name in {
-                    "upload_pubg_both.py", "metadata.py", "uploader.py", "fast_download.py"}]
+                    "upload_pubg_gl.py", "metadata.py", "uploader.py", "fast_download.py"}]
         print("ERROR TYPE: " + type(error).__name__, flush=True)
         print("ERROR LOCATION: " + " > ".join(safe[-6:]), flush=True)
         if isinstance(error, (RuntimeError, AttributeError)):
