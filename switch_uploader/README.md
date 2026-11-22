@@ -5,7 +5,7 @@ presents an exclusive batch selector. It does not create a Telegram bot.
 
 ## Pick one batch in GitHub Actions
 
-- `first_two`: **Solateria 1.0.5** + **Ready or Nowhere 1.0.0-1**
+- `first_two`: **Solateria 1.0.5** + **Ready or Not 1.0.0**
 - `last_three`: **Mario vs. Donkey Kong 1.0.1** + **Cult of the Lamb 1.5.27** + **Super Mario 3D World + Bowser's Fury 1.2.2**
 
 All five URLs and icons are in `switch_uploader/games.json` in that exact order.

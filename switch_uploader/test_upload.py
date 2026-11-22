@@ -32,7 +32,7 @@ class SwitchManifestTests(unittest.TestCase):
             [(g.name, g.version) for g in games],
             [
                 ("Solateria", "1.0.5"),
-                ("Ready or Nowhere", "1.0.0-1"),
+                ("Ready or Not", "1.0.0"),
                 ("Mario vs. Donkey Kong", "1.0.1"),
                 ("Cult of the Lamb", "1.5.27"),
                 ("Super Mario 3D World + Bowser's Fury", "1.2.2"),
@@ -40,7 +40,7 @@ class SwitchManifestTests(unittest.TestCase):
         )
         self.assertEqual(
             [g.name for g in selected_games(games, "first_two")],
-            ["Solateria", "Ready or Nowhere"],
+            ["Solateria", "Ready or Not"],
         )
         self.assertEqual(
             [g.name for g in selected_games(games, "last_three")],
