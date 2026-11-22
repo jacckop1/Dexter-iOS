@@ -142,5 +142,18 @@ if __name__ == "__main__":
     try:
         asyncio.run(main_async())
     except Exception as error:
-        print(f"ERROR: {str(error) if isinstance(error, RuntimeError) else type(error).__name__}", flush=True)
+        # Show only a sanitized Python file/line trace, NEVER values of auth
+        # variables, signed links, or stack-local data.
+        import traceback
+        frames = traceback.extract_tb(error.__traceback__)
+        safe = [f"{Path(frame.filename).name}:{frame.lineno} in {frame.name}"
+                for frame in frames if Path(frame.filename).name in {
+                    "upload_pubg_both.py", "metadata.py", "uploader.py", "fast_download.py"}]
+        print("ERROR TYPE: " + type(error).__name__, flush=True)
+        print("ERROR LOCATION: " + " > ".join(safe[-6:]), flush=True)
+        if isinstance(error, (RuntimeError, AttributeError)):
+            msg = str(error)
+            # Attributes don't contain access credentials; RuntimeError may.
+            if isinstance(error, AttributeError):
+                print("ATTRIBUTE DETAIL: " + msg[:200], flush=True)
         raise SystemExit(1)
