@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
@@ -156,6 +157,32 @@ def thumbnail(http: requests.Session, url: str, path: Path) -> Path | None:
     raise RuntimeError("Icon could not be compressed for Telegram")
 
 
+def thumbnail_safely(http: requests.Session, url: str, path: Path,
+                     label: str) -> Path | None:
+    """Optional icon failure cannot prevent delivery of a multi-GB IPA.
+
+    Retry transient HTTP limits; keep original icon URL in the manifest.
+    Never print signed URLs or other request details.
+    """
+    for attempt in range(1, 4):
+        try:
+            return thumbnail(http, url, path)
+        except (requests.RequestException, RuntimeError, OSError, ValueError) as error:
+            code = getattr(getattr(error, "response", None), "status_code", None)
+            retryable = (code in (429, 500, 502, 503, 504)
+                         or isinstance(error, (requests.Timeout, requests.ConnectionError)))
+            if retryable and attempt < 3:
+                print(f"[{label}] Thumbnail temporarily unavailable "
+                      f"(HTTP {code or 'network'}); retry {attempt}/2", flush=True)
+                time.sleep(2 ** attempt)
+                continue
+            print(f"[{label}] WARNING: thumbnail unavailable "
+                  f"(HTTP {code or type(error).__name__}); continuing without thumbnail",
+                  flush=True)
+            return None
+    return None
+
+
 def required_env(key: str) -> str:
     s = os.getenv(key, "").strip()
     if not s:
@@ -195,7 +222,7 @@ async def send_games() -> None:
                         if available < expected + 600 * 1024 * 1024:
                             raise RuntimeError("Insufficient free disk space for this IPA")
                         thumb = (await asyncio.to_thread(
-                            thumbnail, http, game.icon, base / "icon.jpg"
+                            thumbnail_safely, http, game.icon, base / "icon.jpg", label
                         )) if game.icon else None
                         out = base / game.filename
                         await asyncio.to_thread(

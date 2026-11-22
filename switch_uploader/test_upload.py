@@ -2,8 +2,11 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from upload import CAPTION, USER_TAG, load_games, selected_games
+import requests
+
+from upload import CAPTION, USER_TAG, load_games, selected_games, thumbnail_safely
 
 
 class SwitchManifestTests(unittest.TestCase):
@@ -58,6 +61,21 @@ class SwitchManifestTests(unittest.TestCase):
             ["noord-store.com", "noord-store.com", "ipasoon.icu", "ipasoon.icu", "ipasoon.icu"]
         )
         self.assertTrue(all(g.filename.endswith(" [ @iKiraPlus ].ipa") for g in games))
+
+    def test_icon_429_retry_then_skip_without_failing_game(self):
+        response = requests.Response()
+        response.status_code = 429
+        error = requests.HTTPError("HTTP 429")
+        error.response = response
+        with patch("upload.thumbnail", side_effect=error) as icon:
+            with patch("upload.time.sleep") as wait:
+                fallback = thumbnail_safely(
+                    requests.Session(), "https://example.org/icon.png",
+                    Path("/tmp/not-used-thumbnail.jpg"), "test-icon"
+                )
+        self.assertIsNone(fallback)
+        self.assertEqual(icon.call_count, 3)
+        self.assertEqual(wait.call_count, 2)
 
     def test_reject_unsupported_batch(self):
         with self.assertRaises(RuntimeError):
