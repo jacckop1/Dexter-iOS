@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/switch-source-probe.yml"
+      - "switch_uploader/source_probe.py"
   workflow_dispatch:
 
 permissions:
@@ -20,6 +21,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install requests
+      - run: python -m pip install requests pillow
       - name: Check Range responses for five links without downloading IPAs
         run: python switch_uploader/source_probe.py
