@@ -20,7 +20,7 @@ class MetadataTests(unittest.TestCase):
         fixture = json.loads((Path(__file__).parent / "pubg_targets.json").read_text(encoding="utf-8"))
         self.assertEqual(len(fixture["apps"]), 1)
         expected = {
-            "APP-5874636765": ("Pubg GL Hack", "https://dl.ikiraplus.workers.dev/dl/pubg-hack-gl-v4.7.0"),
+            "APP-5874636765": ("Pubg GL Hack", "http://file-to-link-stevebotz-01.koyeb.app/9715/EL+CHAPO+PRO+V2+4.7.ipa?hash=AgADQS"),
         }
         for app_id, (name, url) in expected.items():
             item = extract_item(fixture, app_id)
