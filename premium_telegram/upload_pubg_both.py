@@ -17,7 +17,8 @@ from telethon.sessions import StringSession
 from telethon.tl.types import DocumentAttributeFilename
 
 from metadata import caption_segments, load_json, write_thumb
-from resilient_transfer import MAX_PARTS, PART_SIZE, download_resumable, upload_big_parts
+from fast_download import fast_download
+from resilient_transfer import MAX_PARTS, PART_SIZE, upload_big_parts
 from uploader import auth_values, filename_safe, inspect_source
 
 
@@ -60,7 +61,7 @@ def download_job(job: Job, folder: Path) -> tuple[Path, Path]:
         thumb = write_thumb(http, job.icon, folder / f"{job.key}-thumb.jpg")
         file = folder / job.filename
         print(f"[{job.key}] Thumbnail ready; downloading {job.size:,} bytes", flush=True)
-        download_resumable(http, job.url, file, job.size, require_range=True)
+        fast_download(job.url, file, job.size, label=job.key, connections=8)
         if file.stat().st_size != job.size:
             raise RuntimeError(f"{job.key}: downloaded file size does not match expected size")
         return file, thumb
@@ -69,7 +70,7 @@ def download_job(job: Job, folder: Path) -> tuple[Path, Path]:
 async def upload_job(client, job: Job, folder: Path) -> None:
     file, thumb = await asyncio.to_thread(download_job, job, folder)
     print(f"[{job.key}] Full IPA downloaded; starting MTProto part upload", flush=True)
-    uploaded = await upload_big_parts(client, file, concurrency=2, label=job.key)
+    uploaded = await upload_big_parts(client, file, concurrency=3, label=job.key)
     print(f"[{job.key}] Parts uploaded; sending to Saved Messages", flush=True)
     chunks = caption_segments(job.note)
     message = await client.send_file(

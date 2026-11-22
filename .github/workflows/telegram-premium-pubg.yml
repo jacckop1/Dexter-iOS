@@ -56,5 +56,5 @@ jobs:
       - name: Validate JSON and reconnect/resume logic
         run: python -m unittest discover -s premium_telegram -p 'test_*.py' -v
 
-      - name: Verify Premium and concurrently transfer PUBG games
+      - name: Verify Premium and concurrently transfer PUBG games (progress every 5%)
         run: python premium_telegram/upload_pubg_both.py

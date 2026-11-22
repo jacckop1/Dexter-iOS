@@ -136,3 +136,9 @@ The PUBG preset uploads GL and KR **concurrently inside one GitHub runner using 
 ### Start
 
 Go to Actions -> Upload PUBG GL + KR to Saved Messages -> Run workflow. Select `game=both`, set `verify_only=false`, and dispatch once. The workflow will download both games and deliver each to Saved Messages under the specified exact filename, note and thumbnail. **Do not dispatch the generic uploader or a second PUBG workflow simultaneously using this same StringSession.** You can use `gl` or `kr` separately if one game needs retry. No live transfer has been started automatically just by editing the repository.
+
+## Fast download and live progress (2026-11-22)
+
+The PUBG uploader now uses **8 independent HTTP Range connections per game** (16 in total with `both`) on the GitHub-hosted Ubuntu runner. It downloads 32 MiB chunks directly into disjoint offsets of one sparse IPA, so there is no extra full-size temporary copy. A frozen / dropped connection retries the missing portion of its range from the last downloaded byte. This optimizes use of the bandwidth *available to the GitHub runner and source server*; it cannot choose a globally fastest network or bypass host throttling.
+
+The GitHub Actions **step log** receives a visible `::notice` at **every 5%** of each game's download, with game label, transferred MiB, average MiB/s and estimated seconds remaining. Telegram-part upload progress is also logged every 5% for each game, using the same active session. The combined run may show interleaved GL/KR messages because both games transfer concurrently. These are log events / annotations, not a GitHub Actions dashboard progress bar. A new GitHub runner or cancelled job still cannot resume old bytes.
