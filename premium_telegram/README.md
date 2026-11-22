@@ -66,3 +66,25 @@ The `url` workflow input can be visible to people who can see workflow runs. Pre
 4. Delete only this workflow and `premium_telegram/` or delete the entire repository **only if you are sure you don't need the existing Dexter iOS project**. Deleting this repository also deletes its iOS source code and build workflows.
 
 **Your original `ikiraplus/dlbot` repository remains untouched.**
+
+## QR login in GitHub Codespaces (no Termux / PC required)
+
+From this repository, click **Code -> Codespaces -> Create codespace on main**.
+Then open the Codespaces terminal and enter:
+
+```bash
+python -m pip install -r premium_telegram/requirements.txt
+python premium_telegram/qr_session.py
+```
+
+Enter your `API ID` and `API Hash`. The terminal will display a QR code. **On a separate phone with your Telegram account already logged in**, open Telegram **Settings -> Devices -> Link Desktop Device** and scan the QR. Approve login and, if requested, enter your two-step password in the private terminal. Copy the resulting `TG_STRING_SESSION` into **Repository Settings -> Secrets and variables -> Actions**. Never post it publicly.
+
+**Only one phone?** QR scanning your own phone's browser is generally impractical. Use the login-code method instead, in the same Codespace terminal:
+
+```bash
+python premium_telegram/generate_session.py
+```
+
+It prompts for phone number, Telegram login code and optional two-step password. You do **not** need a second device for this approach.
+
+For security, **do not run QR/session generation via GitHub Actions**: public logs can expose login credentials. Close and delete your Codespace when finished, and after the one-off upload terminate that Telegram session via **Settings -> Devices**.
