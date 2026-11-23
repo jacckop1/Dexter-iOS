@@ -7,15 +7,11 @@ on:
       batch:
         description: "Select which games to download and upload"
         required: true
-        default: remaining_four
+        default: first_two
         type: choice
         options:
-          - remaining_four
+          - first_two
           - last_three
-          - ready_or_nowhere
-          - mario_vs_donkey_kong
-          - cult_of_the_lamb
-          - super_mario_3d_world
 
 permissions:
   contents: read

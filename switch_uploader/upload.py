@@ -6,20 +6,17 @@ Source links are read from games.json, not from Telegram messages or bots.
 """
 
 import asyncio
-import io
 import json
 import os
 import re
 import shutil
 import tempfile
-import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import requests
-from PIL import Image, ImageOps, UnidentifiedImageError
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import DocumentAttributeFilename
@@ -36,27 +33,21 @@ CAPTION = (
 USER_TAG = "@iKiraPlus"
 MANIFEST = Path(__file__).with_name("games.json")
 MAX_FILE_BYTES = PART_SIZE * MAX_PARTS
-ICON_MAX_BYTES = 5 * 1024 * 1024
 
-# Solateria has already been delivered and was removed from games.json.
-# Never include completed Solateria in any available selection.
+# Only the five pending games are eligible. Solateria was already delivered.
+# Order matters: first_two is Ready or Nowhere + Air Strike.
 BATCH_SLICES = {
-    "remaining_four": slice(0, 4),
-    "last_three": slice(1, 4),
-    "ready_or_nowhere": slice(0, 1),
-    "mario_vs_donkey_kong": slice(1, 2),
-    "cult_of_the_lamb": slice(2, 3),
-    "super_mario_3d_world": slice(3, 4),
+    "first_two": slice(0, 2),
+    "last_three": slice(2, 5),
 }
-
 
 def selected_games(games: list["Game"], batch: str) -> list["Game"]:
     if batch not in BATCH_SLICES:
         raise RuntimeError("Invalid game selection: choose a configured batch or single game")
-    if len(games) != 4:
-        raise RuntimeError("Expected exactly four remaining games")
+    if len(games) != 5:
+        raise RuntimeError("Expected exactly five pending games")
     selected = games[BATCH_SLICES[batch]]
-    if len(selected) not in (1, 3, 4):
+    if len(selected) not in (2, 3):
         raise RuntimeError("Unexpected number of selected games")
     return selected
 
@@ -131,61 +122,20 @@ def inspect_remote(http: requests.Session, url: str) -> int:
         return size
 
 
-def thumbnail(http: requests.Session, url: str, path: Path) -> Path | None:
-    if not url:
-        return None
-    with http.get(url, stream=True, timeout=(15, 35)) as response:
-        response.raise_for_status()
-        raw = bytearray()
-        for chunk in response.iter_content(chunk_size=65536):
-            raw.extend(chunk)
-            if len(raw) > ICON_MAX_BYTES:
-                raise RuntimeError("Icon image exceeds 5 MiB")
-    try:
-        with Image.open(io.BytesIO(raw)) as im:
-            im.load()
-            im.thumbnail((320, 320))
-            rgba = im.convert("RGBA")
-            canvas = Image.new("RGB", rgba.size, "white")
-            canvas.paste(rgba, (0, 0), rgba.getchannel("A"))
-            canvas = ImageOps.pad(canvas, (320, 320), color="white")
-    except (UnidentifiedImageError, ValueError, OSError):
-        raise RuntimeError("Invalid icon image") from None
-    for size in (320, 256, 192, 160):
-        image = canvas if size == 320 else canvas.resize((size, size))
-        for quality in (80, 60, 40):
-            buf = io.BytesIO()
-            image.save(buf, format="JPEG", optimize=True, quality=quality)
-            if buf.tell() < 19 * 1024:
-                path.write_bytes(buf.getvalue())
-                return path
-    raise RuntimeError("Icon could not be compressed for Telegram")
+async def send_game_document(client, uploaded, filename: str):
+    """Send only the IPA with a clean filename/caption; NO document thumbnail.
 
-
-def thumbnail_safely(http: requests.Session, url: str, path: Path,
-                     label: str) -> Path | None:
-    """Optional icon failure cannot prevent delivery of a multi-GB IPA.
-
-    Retry transient HTTP limits; keep original icon URL in the manifest.
-    Never print signed URLs or other request details.
+    Cover/icon metadata is kept in games.json, but is never fetched or sent.
+    Passing an uploaded InputFileBig with no 'thumb' argument prevents a custom
+    thumbnail from being attached to the Telegram document.
     """
-    for attempt in range(1, 4):
-        try:
-            return thumbnail(http, url, path)
-        except (requests.RequestException, RuntimeError, OSError, ValueError) as error:
-            code = getattr(getattr(error, "response", None), "status_code", None)
-            retryable = (code in (429, 500, 502, 503, 504)
-                         or isinstance(error, (requests.Timeout, requests.ConnectionError)))
-            if retryable and attempt < 3:
-                print(f"[{label}] Thumbnail temporarily unavailable "
-                      f"(HTTP {code or 'network'}); retry {attempt}/2", flush=True)
-                time.sleep(2 ** attempt)
-                continue
-            print(f"[{label}] WARNING: thumbnail unavailable "
-                  f"(HTTP {code or type(error).__name__}); continuing without thumbnail",
-                  flush=True)
-            return None
-    return None
+    return await client.send_file(
+        "me", uploaded,
+        caption=CAPTION,
+        force_document=True,
+        parse_mode=None,
+        attributes=[DocumentAttributeFilename(file_name=filename)],
+    )
 
 
 def required_env(key: str) -> str:
@@ -226,9 +176,6 @@ async def send_games() -> None:
                         available = shutil.disk_usage(base).free
                         if available < expected + 600 * 1024 * 1024:
                             raise RuntimeError("Insufficient free disk space for this IPA")
-                        thumb = (await asyncio.to_thread(
-                            thumbnail_safely, http, game.icon, base / "icon.jpg", label
-                        )) if game.icon else None
                         out = base / game.filename
                         await asyncio.to_thread(
                             fast_download,
@@ -241,15 +188,10 @@ async def send_games() -> None:
                             raise RuntimeError("Size mismatch after download")
                         print(f"[{label}] Download complete; uploading in 512-KiB Telegram parts", flush=True)
                         uploaded = await upload_big_parts(client, out, concurrency=6, label=label)
-                        msg = await client.send_file(
-                            "me", uploaded,
-                            caption=CAPTION, thumb=str(thumb) if thumb else None,
-                            force_document=True, parse_mode=None,
-                            attributes=[DocumentAttributeFilename(file_name=game.filename)]
-                        )
+                        msg = await send_game_document(client, uploaded, game.filename)
                         if not msg:
                             raise RuntimeError("Telegram did not acknowledge Saved Messages delivery")
-                        print(f"[{label}] SUCCESS: sent to Saved Messages with fixed caption", flush=True)
+                        print(f"[{label}] SUCCESS: IPA sent to Saved Messages without a thumbnail", flush=True)
             except Exception as error:
                 # Avoid logging signed IPA/icon URLs, sessions, or source content.
                 details = str(error) if isinstance(error, RuntimeError) else type(error).__name__

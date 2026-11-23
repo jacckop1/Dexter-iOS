@@ -2,11 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock
 
-import requests
-
-from upload import CAPTION, USER_TAG, load_games, selected_games, thumbnail_safely
+from upload import CAPTION, USER_TAG, load_games, selected_games, send_game_document
 
 
 class SwitchManifestTests(unittest.TestCase):
@@ -29,21 +27,21 @@ class SwitchManifestTests(unittest.TestCase):
             self.assertEqual(game.filename, "My Game - 1.4.2 [ @iKiraPlus ].ipa")
             self.assertEqual(game.icon, "")
 
-    def test_exact_four_pending_games_and_groups(self):
+    def test_exact_five_pending_games_and_groups(self):
         games = load_games()
         self.assertEqual(
             [(g.name, g.version) for g in games],
             [
                 ("Ready or Nowhere", "1.0.0"),
+                ("Air Strike Command Tactical Assault Operation", "1.0.0"),
                 ("Mario vs. Donkey Kong", "1.0.1"),
                 ("Cult of the Lamb", "1.5.27"),
                 ("Super Mario 3D World + Bowser's Fury", "1.2.2"),
             ],
         )
         self.assertEqual(
-            [g.name for g in selected_games(games, "remaining_four")],
-            ["Ready or Nowhere", "Mario vs. Donkey Kong", "Cult of the Lamb",
-             "Super Mario 3D World + Bowser's Fury"],
+            [g.name for g in selected_games(games, "first_two")],
+            ["Ready or Nowhere", "Air Strike Command Tactical Assault Operation"],
         )
         self.assertEqual(
             [g.name for g in selected_games(games, "last_three")],
@@ -51,54 +49,27 @@ class SwitchManifestTests(unittest.TestCase):
              "Super Mario 3D World + Bowser's Fury"],
         )
         self.assertEqual(
-            sorted(g.name for g in selected_games(games, "remaining_four")),
-            sorted(g.name for g in games),
+            [g.name for batch in ("first_two", "last_three")
+             for g in selected_games(games, batch)],
+            [g.name for g in games],
         )
-        self.assertTrue(all(g.icon.startswith("https://") for g in games))
         self.assertEqual(
             [g.url.split("/")[2] for g in games],
-            ["noord-store.com", "ipasoon.icu", "ipasoon.icu", "ipasoon.icu"]
+            ["noord-store.com", "noord-store.com",
+             "ipasoon.icu", "ipasoon.icu", "ipasoon.icu"],
         )
         self.assertTrue(all(g.filename.endswith(" [ @iKiraPlus ].ipa") for g in games))
-
-    def test_single_game_retries_do_not_reupload_other_games(self):
-        games = load_games()
-        expected = {
-            "ready_or_nowhere": "Ready or Nowhere",
-            "mario_vs_donkey_kong": "Mario vs. Donkey Kong",
-            "cult_of_the_lamb": "Cult of the Lamb",
-            "super_mario_3d_world": "Super Mario 3D World + Bowser's Fury",
-        }
-        for selection, name in expected.items():
-            with self.subTest(selection=selection):
-                chosen = selected_games(games, selection)
-                self.assertEqual(len(chosen), 1)
-                self.assertEqual(chosen[0].name, name)
-
-    def test_icon_429_retry_then_skip_without_failing_game(self):
-        response = requests.Response()
-        response.status_code = 429
-        error = requests.HTTPError("HTTP 429")
-        error.response = response
-        with patch("upload.thumbnail", side_effect=error) as icon:
-            with patch("upload.time.sleep") as wait:
-                fallback = thumbnail_safely(
-                    requests.Session(), "https://example.org/icon.png",
-                    Path("/tmp/not-used-thumbnail.jpg"), "test-icon"
-                )
-        self.assertIsNone(fallback)
-        self.assertEqual(icon.call_count, 3)
-        self.assertEqual(wait.call_count, 2)
+        self.assertTrue(all(g.icon.startswith("https://") for g in games if g.icon))
+        self.assertEqual(games[1].icon, "")
 
     def test_reject_unsupported_batch(self):
+        games = load_games()
+        for name in ("all", "remaining_four", "solateria", "ready_or_nowhere"):
+            with self.subTest(name=name):
+                with self.assertRaises(RuntimeError):
+                    selected_games(games, name)
         with self.assertRaises(RuntimeError):
-            selected_games(load_games(), "all")
-        with self.assertRaises(RuntimeError):
-            selected_games(load_games(), "solateria")
-        with self.assertRaises(RuntimeError):
-            selected_games(load_games(), "first_two")
-        with self.assertRaises(RuntimeError):
-            selected_games(load_games()[:2], "remaining_four")
+            selected_games(games[:4], "first_two")
 
     def test_duplicate_detection(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -114,6 +85,22 @@ class SwitchManifestTests(unittest.TestCase):
             file.write_text('{"games": []}', encoding="utf-8")
             with self.assertRaises(RuntimeError):
                 load_games(file)
+
+
+class NoThumbnailTests(unittest.IsolatedAsyncioTestCase):
+    async def test_deliver_ipa_without_custom_thumb_or_icon_request(self):
+        client = MagicMock()
+        client.send_file = AsyncMock(return_value=object())
+        file = object()
+        name = "Air Strike Command Tactical Assault Operation - 1.0.0 [ @iKiraPlus ].ipa"
+        result = await send_game_document(client, file, name)
+        self.assertIsNotNone(result)
+        args, kwargs = client.send_file.await_args
+        self.assertEqual(args, ("me", file))
+        self.assertNotIn("thumb", kwargs)
+        self.assertTrue(kwargs["force_document"])
+        self.assertEqual(kwargs["caption"], CAPTION)
+        self.assertEqual(kwargs["attributes"][0].file_name, name)
 
 
 if __name__ == "__main__":

@@ -1,25 +1,29 @@
-# Nintendo Switch IPA uploads — four remaining games
+# Nintendo Switch IPA: five pending games, two batches, no thumbnails
 
-**Solateria 1.0.5 was already uploaded** and has been removed from the
-upload manifest to avoid accidental duplicate delivery.
+**Solateria was previously delivered and is excluded from this manifest.**
 
-The following **four remaining games** are configured, with their exact
-IPA URLs supplied by the user and their original icons and versions retained:
+The five configured games are sent sequentially as IPA documents to the
+authorized personal Telegram Premium account's **Saved Messages**.
 
-1. Ready or Nowhere — 1.0.0 (noord-store.com)
-2. Mario vs. Donkey Kong — 1.0.1 (ipasoon.icu)
-3. Cult of the Lamb — 1.5.27 (ipasoon.icu)
-4. Super Mario 3D World + Bowser's Fury — 1.2.2 (ipasoon.icu)
+## Batch options (ONLY TWO)
 
-The uploader only runs when the user manually chooses **Run workflow** in
-**Actions -> Nintendo Switch IPA to Saved Messages**. The default batch is
-`remaining_four`, which sequentially downloads, uploads, and deletes the
-four files, one at a time. Other choices are `last_three` and four
-individual game names, so a successful upload need not be duplicated if
-a later one fails.
+`first_two`:
+1. Ready or Nowhere — 1.0.0
+2. Air Strike Command Tactical Assault Operation — 1.0.0
 
-The IPA URLs, original names, versions, and image URLs are in
-`switch_uploader/games.json`. The Telegram caption is fixed:
+`last_three`:
+3. Mario vs. Donkey Kong — 1.0.1
+4. Cult of the Lamb — 1.5.27
+5. Super Mario 3D World + Bowser's Fury — 1.2.2
+
+Source URLs are the exact user-supplied links in `switch_uploader/games.json`.
+The four previously configured icon URLs remain as metadata; Air Strike
+has no icon URL because none was provided. **The uploader never downloads
+an icon, sends a cover-photo message or sets a Telegram document thumbnail**.
+It sends only each IPA document with the formatted name, in the order above.
+
+Every IPA filename follows `Game Name - Version [ @iKiraPlus ].ipa`.
+The Telegram caption remains:
 
 ```text
 لعبة نينتندو سويتش حصرية.
@@ -29,23 +33,18 @@ The IPA URLs, original names, versions, and image URLs are in
 - قد تحتوي تحميل داخلي.
 ```
 
-All delivered filenames have the format
-`Game Name - Version [ @iKiraPlus ].ipa`.
+## Manual upload only
 
-## Setup and limits
+Go to **Actions -> Nintendo Switch IPA to Saved Messages -> Run workflow**,
+then choose one of exactly two options: `first_two` or `last_three`.
+`first_two` is the default. **No upload runs automatically on git push.**
+The commit is marked `[skip ci]` so the source diagnostic is not triggered
+by this update. Do not run two workflows concurrently with the same
+Telegram StringSession.
 
-Configure GitHub Actions Secrets `TG_API_ID`, `TG_API_HASH` and
-`TG_STRING_SESSION` for a personal Telegram Premium account.
-The runner downloads each IPA with eight parallel 8-MiB HTTP Range requests,
-retrying missing bytes on disconnect, then uses six concurrent 512-KiB
-Telegram part lanes. Progress notices every 5%, with upload heartbeats
-every 60 seconds. Transfer rates depend on the source and Telegram.
-
-The `remaining_four` choice is **not a dry run**: when manually triggered,
-it actually sends these four files to your Telegram Saved Messages.
-Do not trigger two upload workflows concurrently with the same session.
-A cancelled runner loses partial downloads and in-progress Telegram uploads.
-
-This edit was committed with `[skip ci]` specifically to avoid launching
-any automatic push-triggered workflow at the user's request. No upload or
-source probe was manually dispatched as part of this change.
+The three repository secrets `TG_API_ID`, `TG_API_HASH`,
+`TG_STRING_SESSION` must be configured for your personal Premium account.
+Files are downloaded/uploaded sequentially and removed from local disk
+between games. Ranged downloading and Telegram parts include retries.
+A cancelled GitHub runner loses unfinished file progress, and transfer
+speed depends on both the source server and Telegram.
