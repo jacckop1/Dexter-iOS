@@ -1,12 +1,6 @@
 {
   "games": [
     {
-      "name": "Solateria",
-      "version": "1.0.5",
-      "url": "https://noord-store.com/js/output/a33f661df00b4f6795fd95107f84c48a_50firstone_SOLATERIA_105_orgnxnative01000d7024c08000.signed.ipa",
-      "icon": "https://images.igdb.com/igdb/image/upload/t_1080p/ar6fv7.jpg"
-    },
-    {
       "name": "Ready or Nowhere",
       "version": "1.0.0",
       "url": "https://noord-store.com/js/output/a33db88984b149aeb57f2a16b10f49ae_50firstone_ReadyorNowhere_100_orgnxnative0100aaf02813c000.signed.ipa",

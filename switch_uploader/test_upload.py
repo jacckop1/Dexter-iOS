@@ -29,12 +29,11 @@ class SwitchManifestTests(unittest.TestCase):
             self.assertEqual(game.filename, "My Game - 1.4.2 [ @iKiraPlus ].ipa")
             self.assertEqual(game.icon, "")
 
-    def test_exact_five_games_and_groups(self):
+    def test_exact_four_pending_games_and_groups(self):
         games = load_games()
         self.assertEqual(
             [(g.name, g.version) for g in games],
             [
-                ("Solateria", "1.0.5"),
                 ("Ready or Nowhere", "1.0.0"),
                 ("Mario vs. Donkey Kong", "1.0.1"),
                 ("Cult of the Lamb", "1.5.27"),
@@ -42,8 +41,9 @@ class SwitchManifestTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            [g.name for g in selected_games(games, "first_two")],
-            ["Solateria", "Ready or Nowhere"],
+            [g.name for g in selected_games(games, "remaining_four")],
+            ["Ready or Nowhere", "Mario vs. Donkey Kong", "Cult of the Lamb",
+             "Super Mario 3D World + Bowser's Fury"],
         )
         self.assertEqual(
             [g.name for g in selected_games(games, "last_three")],
@@ -51,21 +51,19 @@ class SwitchManifestTests(unittest.TestCase):
              "Super Mario 3D World + Bowser's Fury"],
         )
         self.assertEqual(
-            sorted(g.name for group in ("first_two", "last_three")
-                   for g in selected_games(games, group)),
+            sorted(g.name for g in selected_games(games, "remaining_four")),
             sorted(g.name for g in games),
         )
         self.assertTrue(all(g.icon.startswith("https://") for g in games))
         self.assertEqual(
             [g.url.split("/")[2] for g in games],
-            ["noord-store.com", "noord-store.com", "ipasoon.icu", "ipasoon.icu", "ipasoon.icu"]
+            ["noord-store.com", "ipasoon.icu", "ipasoon.icu", "ipasoon.icu"]
         )
         self.assertTrue(all(g.filename.endswith(" [ @iKiraPlus ].ipa") for g in games))
 
     def test_single_game_retries_do_not_reupload_other_games(self):
         games = load_games()
         expected = {
-            "solateria": "Solateria",
             "ready_or_nowhere": "Ready or Nowhere",
             "mario_vs_donkey_kong": "Mario vs. Donkey Kong",
             "cult_of_the_lamb": "Cult of the Lamb",
@@ -96,7 +94,11 @@ class SwitchManifestTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             selected_games(load_games(), "all")
         with self.assertRaises(RuntimeError):
-            selected_games(load_games()[:2], "first_two")
+            selected_games(load_games(), "solateria")
+        with self.assertRaises(RuntimeError):
+            selected_games(load_games(), "first_two")
+        with self.assertRaises(RuntimeError):
+            selected_games(load_games()[:2], "remaining_four")
 
     def test_duplicate_detection(self):
         with tempfile.TemporaryDirectory() as folder:

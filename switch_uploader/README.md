@@ -1,45 +1,25 @@
-# Nintendo Switch IPA uploads to personal Telegram Saved Messages
+# Nintendo Switch IPA uploads — four remaining games
 
-This one-off uploader runs ONLY on manually dispatched GitHub Actions and
-presents an exclusive batch selector. It does not create a Telegram bot.
+**Solateria 1.0.5 was already uploaded** and has been removed from the
+upload manifest to avoid accidental duplicate delivery.
 
-## Pick one batch in GitHub Actions
+The following **four remaining games** are configured, with their exact
+IPA URLs supplied by the user and their original icons and versions retained:
 
-- `first_two`: **Solateria 1.0.5** + **Ready or Nowhere 1.0.0**
-- `last_three`: **Mario vs. Donkey Kong 1.0.1** + **Cult of the Lamb 1.5.27** + **Super Mario 3D World + Bowser's Fury 1.2.2**
+1. Ready or Nowhere — 1.0.0 (noord-store.com)
+2. Mario vs. Donkey Kong — 1.0.1 (ipasoon.icu)
+3. Cult of the Lamb — 1.5.27 (ipasoon.icu)
+4. Super Mario 3D World + Bowser's Fury — 1.2.2 (ipasoon.icu)
 
-All five URLs and icons are in `switch_uploader/games.json` in that exact order.
-The workflow validates the chosen batch and transfers only those selected.
-Select the other batch in a separate run. Only one run is active at a time
-because the workflow shares a personal Telegram StringSession.
+The uploader only runs when the user manually chooses **Run workflow** in
+**Actions -> Nintendo Switch IPA to Saved Messages**. The default batch is
+`remaining_four`, which sequentially downloads, uploads, and deletes the
+four files, one at a time. Other choices are `last_three` and four
+individual game names, so a successful upload need not be duplicated if
+a later one fails.
 
-### Single-game recovery after an interrupted batch
-
-The manual workflow also supports the individual selections:
-`solateria`, `ready_or_nowhere`, `mario_vs_donkey_kong`,
-`cult_of_the_lamb`, and `super_mario_3d_world`.
-
-The run `45070116079` downloaded **Solateria** successfully, uploaded 50% of
-its Telegram parts, then was **externally cancelled**. The log showed
-`The operation was canceled` and no Python or Telegram failure. Its
-350-minute timeout was not reached and `cancel-in-progress: false` means
-a new run in the same workflow does not automatically cancel the active one.
-GitHub does not expose the exact cancelling actor through this job log.
-
-To retry just Solateria, choose `solateria`. Once its message arrives,
-choose `ready_or_nowhere` (or a batch if you intentionally want to resend
-both). **A cancelled runner discards its local downloaded IPA and all
-in-flight Telegram upload parts**, so a new workflow downloads/re-uploads
-the interrupted file from zero. There is no safe way for this script to
-prevent a manual or platform-issued GitHub job cancellation.
-
-If an upload slows from its early transfer speed, it does not by itself
-indicate failure. Do not cancel just because the 5% progress interval gets
-longer; watch for newly acknowledged parts and use the added live progress
-heartbeat. Never start two separate upload workflows with the same Telegram
-StringSession concurrently.
-
-## Fixed Telegram caption on every file
+The IPA URLs, original names, versions, and image URLs are in
+`switch_uploader/games.json`. The Telegram caption is fixed:
 
 ```text
 لعبة نينتندو سويتش حصرية.
@@ -49,37 +29,23 @@ StringSession concurrently.
 - قد تحتوي تحميل داخلي.
 ```
 
-Filenames are `Name - Version [ @iKiraPlus ].ipa`. Each file is sent as a
-document with the given thumbnail (when available) to **Saved Messages**.
+All delivered filenames have the format
+`Game Name - Version [ @iKiraPlus ].ipa`.
 
-## Start
+## Setup and limits
 
-1. Ensure GitHub Actions is enabled for this repo, and the Actions Secrets
-   `TG_API_ID`, `TG_API_HASH`, `TG_STRING_SESSION` are configured. They
-   must be a **personal Premium account** session, not a bot.
-2. Open **Actions > Nintendo Switch IPA to Saved Messages > Run workflow**.
-3. Choose `first_two` or `last_three` and press **Run workflow** once.
+Configure GitHub Actions Secrets `TG_API_ID`, `TG_API_HASH` and
+`TG_STRING_SESSION` for a personal Telegram Premium account.
+The runner downloads each IPA with eight parallel 8-MiB HTTP Range requests,
+retrying missing bytes on disconnect, then uses six concurrent 512-KiB
+Telegram part lanes. Progress notices every 5%, with upload heartbeats
+every 60 seconds. Transfer rates depend on the source and Telegram.
 
-No download is triggered by pushing this edit. The workflow tests the list
-and batch selection before starting the network transfer. It will reject
-sources without HTTP Range support or a reliable expected byte count.
+The `remaining_four` choice is **not a dry run**: when manually triggered,
+it actually sends these four files to your Telegram Saved Messages.
+Do not trigger two upload workflows concurrently with the same session.
+A cancelled runner loses partial downloads and in-progress Telegram uploads.
 
-## Throughput and constraints
-
-The downloader uses up to **eight simultaneous 8-MiB HTTP Range connections**
-per game (compared to three before); stalled ranges retry their missing
-bytes, eventually switching to 1-MiB requests. The uploader uses **six
-concurrent 512-KiB Telegram upload part lanes**, the maximum supported by
-the included resilient_transfer implementation. Both show 5% progress
-notices with average throughput and ETA.
-
-Games are downloaded, uploaded and deleted one by one to fit typical
-GitHub-hosted runner disk budgets. This is an intentional disk safeguard;
-whole-game downloads are not parallel. Actual throughput depends on each
-source, Cloudflare Worker behavior, Telegram, and GitHub network limits.
-More parallel requests may trigger source rate limits; retry logic handles
-many transient disconnects but does not guarantee delivery. No partial file
-state survives cancellation or a new runner.
-
-After both batches are delivered, remove the workflow and credentials,
-and terminate the temporary session under Telegram Settings > Devices.
+This edit was committed with `[skip ci]` specifically to avoid launching
+any automatic push-triggered workflow at the user's request. No upload or
+source probe was manually dispatched as part of this change.

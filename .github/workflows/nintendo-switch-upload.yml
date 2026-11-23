@@ -7,12 +7,11 @@ on:
       batch:
         description: "Select which games to download and upload"
         required: true
-        default: first_two
+        default: remaining_four
         type: choice
         options:
-          - first_two
+          - remaining_four
           - last_three
-          - solateria
           - ready_or_nowhere
           - mario_vs_donkey_kong
           - cult_of_the_lamb
